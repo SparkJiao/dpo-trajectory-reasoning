@@ -1,0 +1,157 @@
+defaults:
+  - hydra: default
+  - deepspeed@actor_ds_config: train_hybrid_engine_zero1
+  - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+
+dist_load_data_barrier: False
+model_name_or_path: ../pretrained-models/Llama-2-7b-hf
+
+
+tokenizer_init:
+  _target_: general_util.tokenization_utils.init_tokenizer
+  tokenizer_path: ${model_name_or_path}
+
+torch_dtype:
+  _target_: general_util.training_utils.return_torch_dtype
+  dtype: bfloat16
+
+rl_engine_init:
+  _target_: lora_share_trainer.lora_share_remax_engine.DeepSpeedRLLoraEngine
+  base_model:
+    _target_: models.utils.enable_gradient_checkpointing
+    model:
+      _target_: transformers.models.llama.modeling_llama.LlamaForCausalLM.from_pretrained
+      pretrained_model_name_or_path: ${model_name_or_path}
+      torch_dtype: ${torch_dtype}
+      use_flash_attention_2: True
+  tokenizer: ${tokenizer_init}
+
+
+rl_trainer_init:
+  _target_: lora_share_trainer.remax_trainer.DeepSpeedReMaxTrainer
+  generation_config:
+    _target_: transformers.generation.configuration_utils.GenerationConfig
+    max_new_tokens: 512
+    top_p: 0.9
+    temperature: 0.5
+    pad_token_id: 0
+    eos_token_id: 2
+
+kl_ctl: 0.05
+gamma: 0.99
+
+actor_model_init:
+  _target_: models.utils.initialize_peft_model
+  lora_config:
+    _recursive_: False
+    _target_: peft.LoraConfig
+    task_type: CAUSAL_LM
+    inference_mode: False
+    target_modules:
+      _target_: models.utils.find_all_linear_names
+      bits: 16
+    r: 64
+    lora_alpha: 16
+    lora_dropout: 0.05
+  torch_dtype: ${torch_dtype}
+#max_answer_seq_len: 512
+print_answers: True
+
+enable_ema: False
+
+critic_model_init:
+  _target_: models.string_rule_reward.MultipleChoiceAccuracyReward
+  tokenizer: ${tokenizer_init}
+
+read_tensor:
+  _target_: data.logiqav2.ComposePromptGenerator
+  read_func:
+    _target_: data.logiqav2.LogicQAReader
+    flat_options: True
+  template_id: 0
+  compose_keys: [ "context", "question", "option_list", "label" ]
+
+collator:
+  _target_: data.logiqav2.TextInputCollator
+  tokenizer: ${tokenizer_init}
+  max_seq_length: 512
+
+num_workers: 16
+prefetch_factor: 2
+
+exp_name: llama2.7b.chat.lora_share.remax.v1.0.test
+exp_notes:
+output_dir: experiments/${exp_name}
+
+do_train: True
+evaluate_during_training: True
+
+learning_rate: 5e-4
+seed: 42
+fp16: True
+fp16_opt_level: O1
+fp16_bfloat16: True
+ddp_eval: True
+save_best: False
+save_steps: 100
+eval_steps: 100
+max_steps: -1
+warmup_steps:
+warmup_proportion: 0.1
+num_train_epochs: 10
+generation_batches: 1
+total_dataset_len: -1
+logging_steps: 1
+
+prediction_cfg:
+  metric: "acc"
+  measure: 1
+  best_checkpoint:
+  best_result:
+
+# DeepSpeedRLLoraEngine
+per_gpu_train_batch_size: 4
+per_gpu_eval_batch_size: 2
+gradient_accumulation_steps: 1
+gradient_accumulation_steps_actor: ${gradient_accumulation_steps}
+weight_decay: 0.0
+actor_weight_decay: 0.0
+
+actor_ds_config:
+#  train_batch_size: 16
+  train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
+  gradient_accumulation_steps: ${gradient_accumulation_steps_actor}
+  optimizer:
+    type: AdamW
+    params:
+      lr: ${learning_rate}
+      betas: [ 0.9, 0.95 ]
+      weight_decay: ${actor_weight_decay}
+
+#no_decay_name_list:
+#reward_model_init:
+
+summary_helper:
+  _target_: general_util.tensorboard_helper.WandbWriter
+  outputs_index_or_keys:
+    reward: reward
+    return: return
+    max_return: max_return
+    kl_ratio: kl_ratio
+    kl: kl
+    max_kl: max_kl
+    entropy: entropy
+
+
+# Placeholder
+local_rank: -1
+world_size:
+train_batch_size:
+eval_batch_size:
+no_cuda:
+device:
+n_gpu:
