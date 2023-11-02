@@ -220,6 +220,13 @@ def main(cfg: DictConfig):
     train_iterator = trange(int(cfg.num_train_epochs), desc="Epoch", disable=cfg.local_rank not in [-1, 0])
     set_seed(cfg)  # Added here for reproducibility (even between python 2 and 3)
 
+    if cfg.resume:
+        continue_from_global_step = int(cfg.resume.split('-')[-1])
+        logger.info("Fast forwarding to global step %d to resume training from latest checkpoint...", continue_from_global_step)
+        rl_trainer.resume(cfg.resume)
+    else:
+        continue_from_global_step = 0
+
     for epoch in train_iterator:
         for _file in train_files:
             sub_train_dataset = load_and_cache_examples(cfg, tokenizer, _split="train", _file=_file)
@@ -242,6 +249,13 @@ def main(cfg: DictConfig):
 
             step = 0
             for _, batch in enumerate(epoch_iterator):
+                if global_step < continue_from_global_step:
+                    for _ in range(cfg.generations_batches):
+                        step += 1
+                        if step % cfg.gradient_accumulation_steps == 0:
+                            global_step += 1
+                    continue
+
                 batch = batch_to_device(batch, device)
 
                 exp_dataset = None
@@ -288,6 +302,7 @@ def main(cfg: DictConfig):
                 # ):
                 for _, exp_data in enumerate(exp_dataset):
                     step += 1
+                    rl_trainer.train()
                     # actor_loss, actor_return, kl_ratio = rl_trainer.compute_loss(exp_data)
                     outputs = rl_trainer.train_rl_step(exp_data)
 
@@ -445,74 +460,74 @@ def main(cfg: DictConfig):
                 #     )
                 #     writer.flush()
 
-                log_metrics = {}
-                if step % cfg.gradient_accumulation_steps == 0:
-                    # print_rank_0(
-                    #     f"***** Evaluating policy, Epoch {epoch + 1}/{args.num_train_epochs} Step {step}/{len(prompt_train_dataloader)} *****",
-                    #     args.global_rank,
-                    # )
-                    # perplexity = evaluation_by_ppl(trainer, ppl_eval_dataloader, device)
-                    # eval_reward, eval_length, eval_kl, eval_entropy = evaluation_by_reward(
-                    #     trainer, prompt_eval_dataloader, device, args, global_step, False
-                    # )
-                    # print_rank_0(
-                    #     f"eval reward: {eval_reward} | eval length: {eval_length} | eval kl: {eval_kl} | eval entropy: {eval_entropy} | eval ppl: {perplexity}",
-                    #     args.global_rank,
-                    # )
-                    # if args.enable_tensorboard and torch.distributed.get_rank() == 0:
-                    #     writer.add_scalar(
-                    #         "eval/reward", eval_reward, global_step=global_step
-                    #     )
-                    #     writer.add_scalar(
-                    #         "eval/length", eval_length, global_step=global_step
-                    #     )
-                    #     writer.add_scalar("eval/kl", eval_kl, global_step=global_step)
-                    #     writer.add_scalar(
-                    #         "eval/entropy", eval_entropy, global_step=global_step
-                    #     )
-                    #     writer.add_scalar("eval/ppl", perplexity, global_step=global_step)
-                    #     writer.flush()
-                    #
-                    # if best_eval_reward is None:
-                    #     best_eval_reward = eval_reward
-                    # if eval_reward >= best_eval_reward:
-                    #     best_eval_reward = eval_reward
-                    #     save_model(rlhf_engine, tokenizer, args)
+                    log_metrics = {}
+                    if step % cfg.gradient_accumulation_steps == 0:
+                        # print_rank_0(
+                        #     f"***** Evaluating policy, Epoch {epoch + 1}/{args.num_train_epochs} Step {step}/{len(prompt_train_dataloader)} *****",
+                        #     args.global_rank,
+                        # )
+                        # perplexity = evaluation_by_ppl(trainer, ppl_eval_dataloader, device)
+                        # eval_reward, eval_length, eval_kl, eval_entropy = evaluation_by_reward(
+                        #     trainer, prompt_eval_dataloader, device, args, global_step, False
+                        # )
+                        # print_rank_0(
+                        #     f"eval reward: {eval_reward} | eval length: {eval_length} | eval kl: {eval_kl} | eval entropy: {eval_entropy} | eval ppl: {perplexity}",
+                        #     args.global_rank,
+                        # )
+                        # if args.enable_tensorboard and torch.distributed.get_rank() == 0:
+                        #     writer.add_scalar(
+                        #         "eval/reward", eval_reward, global_step=global_step
+                        #     )
+                        #     writer.add_scalar(
+                        #         "eval/length", eval_length, global_step=global_step
+                        #     )
+                        #     writer.add_scalar("eval/kl", eval_kl, global_step=global_step)
+                        #     writer.add_scalar(
+                        #         "eval/entropy", eval_entropy, global_step=global_step
+                        #     )
+                        #     writer.add_scalar("eval/ppl", perplexity, global_step=global_step)
+                        #     writer.flush()
+                        #
+                        # if best_eval_reward is None:
+                        #     best_eval_reward = eval_reward
+                        # if eval_reward >= best_eval_reward:
+                        #     best_eval_reward = eval_reward
+                        #     save_model(rlhf_engine, tokenizer, args)
 
-                    global_step += 1
-                    if cfg.local_rank in [-1, 0]:
-                        logs = tb_helper(clear=True)
-                        log_metrics.update({f"train/{k}": v for k, v in logs.items()})
-                        actor_lr = rl_engine.actor_lr_scheduler.get_lr()[0]
-                        log_metrics["actor_lr"] = actor_lr
+                        global_step += 1
+                        if cfg.local_rank in [-1, 0]:
+                            logs = tb_helper(clear=True)
+                            log_metrics.update({f"train/{k}": v for k, v in logs.items()})
+                            actor_lr = rl_engine.actor_lr_scheduler.get_lr()[0]
+                            log_metrics["actor_lr"] = actor_lr
 
-                    # Save model checkpoint
-                    if cfg.save_steps > 0 and global_step % cfg.save_steps == 0:
-                        output_dir = os.path.join(cfg.output_dir, 'checkpoint-{}'.format(global_step))
-                        if cfg.local_rank in [-1, 0] and not os.path.exists(output_dir):
-                            os.makedirs(output_dir, exist_ok=True)
-                        rl_trainer.save_model(output_dir)
-                        OmegaConf.save(cfg, os.path.join(output_dir, "training_config.yaml"))
-                        logger.info("Saving model checkpoint to %s", output_dir)
+                        # Save model checkpoint
+                        if cfg.save_steps > 0 and global_step % cfg.save_steps == 0:
+                            output_dir = os.path.join(cfg.output_dir, 'checkpoint-{}'.format(global_step))
+                            if cfg.local_rank in [-1, 0] and not os.path.exists(output_dir):
+                                os.makedirs(output_dir, exist_ok=True)
+                            rl_trainer.save_model(output_dir)
+                            OmegaConf.save(cfg, os.path.join(output_dir, "training_config.yaml"))
+                            logger.info("Saving model checkpoint to %s", output_dir)
 
-                    # Evaluation
-                    if cfg.evaluate_during_training and cfg.eval_steps > 0 and global_step % cfg.eval_steps == 0:
-                        # state_dict = get_state_dict(model, cfg)
+                        # Evaluation
+                        if cfg.evaluate_during_training and cfg.eval_steps > 0 and global_step % cfg.eval_steps == 0:
+                            # state_dict = get_state_dict(model, cfg)
 
-                        if cfg.ddp_eval or cfg.local_rank in [-1, 0]:
-                            results = evaluation_by_reward(cfg, rl_trainer, tokenizer, prefix=str(global_step), _split="dev")
+                            if cfg.ddp_eval or cfg.local_rank in [-1, 0]:
+                                results = evaluation_by_reward(cfg, rl_trainer, tokenizer, prefix=str(global_step), _split="dev")
 
-                            if cfg.local_rank in [-1, 0]:
-                                for key, value in results.items():
-                                    log_metrics[f"eval/{key}"] = value
+                                if cfg.local_rank in [-1, 0]:
+                                    for key, value in results.items():
+                                        log_metrics[f"eval/{key}"] = value
 
-                            sub_path = os.path.join(cfg.output_dir, 'checkpoint-{}'.format(global_step))
-                            flag = note_best_checkpoint(cfg, results, sub_path)
-                            if cfg.save_best and flag:
-                                rl_trainer.save_model(cfg.output_dir)
+                                sub_path = os.path.join(cfg.output_dir, 'checkpoint-{}'.format(global_step))
+                                flag = note_best_checkpoint(cfg, results, sub_path)
+                                if cfg.save_best and flag:
+                                    rl_trainer.save_model(cfg.output_dir)
 
-                    if len(log_metrics) > 0 and cfg.local_rank in [-1, 0]:
-                        wandb.log(log_metrics)
+                        if len(log_metrics) > 0 and cfg.local_rank in [-1, 0]:
+                            wandb.log(log_metrics)
 
                 # if args.actor_gradient_checkpointing:
                 #     rlhf_engine.actor.gradient_checkpointing_disable()

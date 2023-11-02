@@ -63,6 +63,7 @@ class DeepSpeedReMaxTrainer:
         self.clip_reward_value = 5.0
         self.gamma = cfg.gamma
         self.generate_time = 0.0
+        self.enable_greedy_baseline = cfg.enable_greedy_baseline
 
         # evaluation metrics
         self.eval_reward = []
@@ -128,14 +129,17 @@ class DeepSpeedReMaxTrainer:
                 f"[{tag}]--- ans    --> step={global_step}, rank={dist.get_rank()}, {self.tokenizer.batch_decode(ans, skip_special_tokens=True)}"
             )
 
-        out_seq = []
-        for i in range(batch_size):
-            if valid_ans_len[i] <= 1:  # if the answer is shorter than 1 token, add " ".
-                seq[i, self.prompt_length] = self.tokenizer.encode(" ")[-1]
-            out_seq.append(seq[i: i + 1])
-        out_seq = torch.cat(out_seq, dim=0)  # concat output in the batch dim
+        # out_seq = []
+        # for i in range(batch_size):
+        #     if valid_ans_len[i] <= 1:  # if the answer is shorter than 1 token, add " ".
+        #         seq[i, self.prompt_length] = self.tokenizer.encode(" ")[-1]
+        #     out_seq.append(seq[i: i + 1])
+        # out_seq = torch.cat(out_seq, dim=0)  # concat output in the batch dim
+        # Rewrite by Fangkai to avoid for loop
+        invalid_mask = valid_ans_len <= 1
+        seq[invalid_mask, prompt_length] = self.tokenizer.encode(" ")[-1]
 
-        return out_seq
+        return seq
 
     def generate_experience(
             self, input_ids, attention_mask, labels, global_step, print_answers=False, training_mode=True
@@ -152,7 +156,7 @@ class DeepSpeedReMaxTrainer:
             do_sample=True if training_mode else False,
             synced_gpus=False,
         )
-        if training_mode:
+        if training_mode and self.enable_greedy_baseline:
             baseline_seq = self._generate_sequence(
                 self.actor_model.module,
                 input_ids,
@@ -182,7 +186,7 @@ class DeepSpeedReMaxTrainer:
                     eos_token_pos = self.prompt_length + ans_mask[0].item()
                     action_mask[i, eos_token_pos] = 1
 
-        if training_mode:
+        if training_mode and self.enable_greedy_baseline:
             baseline_action_mask = baseline_seq.not_equal(pad_token_id).long()
             if self.tokenizer.pad_token == self.tokenizer.eos_token:
                 for i in range(baseline_seq.shape[0]):
@@ -202,7 +206,7 @@ class DeepSpeedReMaxTrainer:
                 seq, action_mask, prompt_length=self.prompt_length, labels=labels,
             )["chosen_end_scores"].detach()
 
-            if training_mode:
+            if training_mode and self.enable_greedy_baseline:
                 baseline_reward_score = self.reward_model.forward_value(
                     baseline_seq, baseline_action_mask, prompt_length=self.prompt_length, labels=labels,
                 )["chosen_end_scores"].detach()
@@ -221,7 +225,9 @@ class DeepSpeedReMaxTrainer:
             softmax_probs * (log_softmax_values - log_softmax_values_ref), dim=-1
         )
 
-        logprobs = log_softmax_values.gather(dim=-1, index=seq[:, 1:].unsqueeze(-1)).squeeze(-1)
+        logprobs = log_softmax_values.gather(dim=-1, index=seq[:, 1:].unsqueeze(-1)).squeeze(-1)  # TODO: Why no right shifting here about `log_softmax_values`?
+        # FIXED: In the new version of torch, `gather` method does not require the dims (except the one to be gathered) has same length.
+        # And the left columns/rows will be ignored.
         ref_logprobs = log_softmax_values_ref.gather(dim=-1, index=seq[:, 1:].unsqueeze(-1)).squeeze(-1)
 
         self.generate_time = generate_end - generate_start
@@ -232,7 +238,7 @@ class DeepSpeedReMaxTrainer:
             "ref_logprobs": ref_logprobs,
             "value": values,
             "rewards": reward_score,
-            "baseline_rewards": baseline_reward_score if training_mode else None,
+            "baseline_rewards": baseline_reward_score if training_mode and self.enable_greedy_baseline else None,
             "full_kl": full_kl,
             "entropy": entropy,
             "input_ids": seq,
@@ -245,7 +251,7 @@ class DeepSpeedReMaxTrainer:
         ends = start + action_mask[:, start:].sum(1)  # + 1
         reward_clip = torch.clamp(
             reward_score, -self.clip_reward_value, self.clip_reward_value
-        )
+        )  # [batch_size]
         batch_size = kl_divergence.shape[0]
         kl_ratio = 0.0
         count = 0
@@ -255,17 +261,19 @@ class DeepSpeedReMaxTrainer:
             for i in reversed(range(start, ends[j])):
                 cumulative_kl = kl_divergence[j, i]
 
-                cumulative_reward *= self.gamma
+                cumulative_reward *= self.gamma  # TODO: How to change this to batch-wise computation and is this necessary? (cannot find in DeepSpeed)
                 returns[j, i] += cumulative_kl + cumulative_reward
                 kl_ratio += torch.abs(cumulative_kl) / (
                         torch.abs(cumulative_reward) + torch.abs(cumulative_kl) + 1e-6
                 )
                 count += 1
         kl_ratio = kl_ratio / count
-        return returns, kl_ratio
+        return returns, kl_ratio  # Added by Fangkai: I removed kl_ratio to save time by changing the above code into batch computation.
+        # return returns
 
     def train_rl_step(self, inputs):
         # train the rlhf mode here
+        # print(inputs.keys())
         prompts = inputs["prompts"]
         log_probs = inputs["logprobs"]
         ref_log_probs = inputs["ref_logprobs"]
@@ -281,7 +289,9 @@ class DeepSpeedReMaxTrainer:
             kl_divergence = -(log_probs - ref_log_probs)
             kl_divergence = self.kl_ctl * kl_divergence
 
-            reward_score = reward_score - baseline_reward_score
+            if baseline_reward_score is not None:
+                reward_score = reward_score - baseline_reward_score
+
             returns, kl_ratio = self.compute_returns(
                 prompts, kl_divergence, reward_score, action_mask
             )
@@ -385,7 +395,7 @@ class DeepSpeedReMaxTrainer:
             # Gather all metrics across different ranks
             tmp = [torch.zeros((5,)) for _ in range(dist.get_world_size())]
             dist.all_gather(tmp, torch.tensor([eval_reward_sum, eval_length_sum, eval_kl_sum, eval_entropy_sum, eval_sample_num],
-                                              dtype=torch.bfloat16, device=f"cuda:{self.cfg.local_rank}"))
+                                              dtype=torch.float, device=f"cuda:{self.cfg.local_rank}"))
             tmp = torch.stack(tmp, dim=0)
             eval_reward_sum = tmp[:, 0].sum().item()
             eval_length_sum = tmp[:, 1].sum().item()
@@ -435,6 +445,9 @@ class DeepSpeedReMaxTrainer:
             unwrapped_model.save_pretrained(actor_save_dir, state_dict=state_dict)
 
             self.tokenizer.save_pretrained(actor_save_dir)
+
+    def resume(self, checkpoint_dir):
+        self.actor_model.load_checkpoint(checkpoint_dir)
 
 
 class DeepSpeedReMaxTrainerUnsupervised(DeepSpeedReMaxTrainer):

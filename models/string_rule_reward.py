@@ -28,9 +28,13 @@ class MultipleChoiceAccuracyReward(nn.Module, RewardModelMixin):
         rewards = []
         for pred, label in zip(preds, labels):
             if len(pred) == 0:
-                rewards.append(0)
+                rewards.append(-1)
             else:
-                rewards.append(int(self.option2int[pred[-1]] == label))
+                # rewards.append(int(self.option2int[pred[-1]] == label))
+                if self.option2int[pred[-1]] == label:
+                    rewards.append(1)
+                else:
+                    rewards.append(-1)
 
         rewards = torch.tensor(rewards, dtype=torch.bfloat16, device=seq.device)
         return {

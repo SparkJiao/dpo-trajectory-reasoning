@@ -1,0 +1,47 @@
+Context:
+A college will continue to implement the overseas funding plan this year. It plans to select several of the six teachers from Mr. Liu, Mr. Zhang, Mr. Wang, Mr. Ma, Mr. Niu and Mr. Zhou to visit abroad. Due to the limitations of funding, the needs of discipline development, curriculum arrangement, place and time of each student's visit, the selection shall meet the following conditions: (1) Mr. Liu is the reserve discipline leader of the college, This time we have to send out. (2) if we choose Mr. Liu, we should also choose Mr. Zhou, but we can't choose Mr. Zhang. (3) only if Mr. Niu can't choose, at least one of Mr. Wang and Mr. Ma can choose. (4) if we don't choose Mr. Wang, we don't choose Mr. Zhou either.
+
+Question: If the above statement is true, which of the followings must be true?
+
+Options:
+A. Mr. Niu didn't choose, but Mr. Zhou did.
+B. Mr. Liu was chose, but Mr. Ma didn't.
+C. Mr. Wang and Mr. Ma were chosen.
+D. Neither Mr. Wang nor Mr. Niu was elected.
+
+Thought 1: Who must be chosen or who must not be chosen according to the context by one-step reasoning?
+Action 1: Take condition (1).
+Observation 1: Mr. Liu must be chosen.
+Thought 2: Based on Observation 1, who must be chosen or who must not be chosen one step further?
+Action 2: Take condition (2).
+Observation 2: Mr. Zhou must be chosen, but Mr. Zhang must not be chosen.
+Thought 3: Based on Observation 2, who must be chosen one step further? And who must not be chosen?
+Action 3: No further conditions can be taken to derive new observations.
+Thought 4: We can evaluate each option to check if there is any contradiction with the observations.
+Action 4: Take option A.
+Observation 4: Mr. Niu didn't choose, but Mr. Zhou did.
+Thought 5: Which observations and conditions are related to Option A?
+Action 5: Observation 2 and condition (3).
+Observation 5: We can confirm that Mr. Zhou was chosen according to observation 2. Condition (3) shows that if Mr. Niu was not chosen, at least one of Mr. Wang and Mr. Ma must be chosen. This needs further analysis by assumption.
+Thought 6: If Mr. Niu was not chosen is true, what will happen? We should examine the truth of the consequences.
+Action 6: Assume that Mr. Niu was not chosen.
+Observation 6: At least one of Mr. Wang and Mr. Ma must be chosen.
+Thought 7: Which observations and conditions are related to Observation 6 to check if there is any contradiction?
+Action 7: Take condition (4).
+Observation 7: If Mr. Wang was not chosen, Mr. Zhou must not be chosen. This contradicts Observation 2. Therefore, Mr. Wang must be chosen. So Observation 6 is true. So Option A is true.
+Action 8: Take option B.
+Observation 8: Mr. Liu was chosen, but Mr. Ma didn't.
+Thought 9: Which observations and conditions are related to Option B?
+Action 9: Observation 1 and condition (3).
+Observation 9: Mr. Liu must be chosen. But we cannot tell whether Mr. Ma was chosen or not. So Option B is not necessarily true.
+Action 10: Take option C.
+Observation 10: Mr. Wang and Mr. Ma were chosen.
+Thought 11: Which observations and conditions are related to Option C?
+Action 11: Condition (3) and condition (4).
+Observation 11: We cannot tell whether Mr. Wang and Mr. Ma were chosen or not. So Option C is not necessarily true.
+Action 12: Take option D.
+Observation 12: Neither Mr. Wang nor Mr. Niu was elected.
+Thought 13: Which observations and conditions are related to Option D?
+Action 13: Condition (3) and condition (4).
+Observation 13: According to condition (3), if Mr. Niu was not chosen, at least one of Mr. Wang and Mr. Ma must be chosen. But Mr. Wang was not chosen according to observation 10. So Mr. Ma must be chosen. According to condition (4), if Mr. Wang was not chosen, Mr. Zhou must not be chosen. So Mr. Zhou was not chosen. This is contradictory to observation 2. So Option D is not true.
+Action 14: Finish[The answer is A.]

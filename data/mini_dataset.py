@@ -15,16 +15,30 @@ class MiniDataset:
                 large_size = len(large_batch)
             for i in range(0, large_size, self.small_batch_size):
                 if type(large_batch) == list or type(large_batch) == tuple:
+                    # small_dataset.append(
+                    #     [x[i: i + self.small_batch_size] for x in large_batch]
+                    # )
                     small_dataset.append(
-                        [x[i: i + self.small_batch_size] for x in large_batch]
+                        [
+                            x[i: i + self.small_batch_size]
+                            if x is not None else None
+                            for x in large_batch
+                        ]
                     )
                 elif type(large_batch) == dict:
-                    small_dataset.append(
-                        {
-                            k: v[i: i + self.small_batch_size]
-                            for k, v in large_batch.items()
-                        }
-                    )
+                    # small_dataset.append(
+                    #     {
+                    #         k: v[i: i + self.small_batch_size]
+                    #         for k, v in large_batch.items()
+                    #     }
+                    # )
+                    tmp = {}
+                    for k, v in large_batch.items():
+                        if v is None:
+                            tmp[k] = None
+                        else:
+                            tmp[k] = v[i: i + self.small_batch_size]
+                    small_dataset.append(tmp)
                 else:
                     small_dataset.append(large_batch[i: i + self.small_batch_size])
         self.free()

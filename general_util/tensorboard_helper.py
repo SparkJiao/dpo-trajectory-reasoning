@@ -88,13 +88,10 @@ class WandbWriter:
                     else:
                         self.logs[name] += scalar
                         self.logs_accumulation[name] += 1
-        logger.warning(self.logs)
-        logger.warning(self.logs_accumulation)
 
     def __call__(self, clear: bool = True) -> Dict[str, Any]:
         logs = {k: v / self.logs_accumulation[k] for k, v in self.logs.items()}
         if clear:
             self.logs = {}
             self.logs_accumulation = {}
-        logger.warning(logs)
         return logs

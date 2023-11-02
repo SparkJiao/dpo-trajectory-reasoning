@@ -6,6 +6,7 @@ from typing import List, Dict, Tuple, Union, Any, Callable
 
 import torch
 from torch.utils.data import Dataset, default_collate
+from data.dpo import DPOPairReader
 from transformers import PreTrainedTokenizer, AutoTokenizer
 
 from general_util.logger import get_child_logger
@@ -22,6 +23,10 @@ templates = [
     "[Context]\n{}\n\n[Question]\n{}\n\n[Options]\n{}\n\nPlease decompose the problem above into smaller ones so that we can solve it separately and reach the final answer by consideing each subproblem and merge the sub-conclusions.\n\n",
     "[Response]\n{}\n\n[Json]\n"
 ]
+
+
+def read_single_file(file_path: str, suffix: str = ""):
+    return open(file_path, "r").read().strip() + suffix
 
 
 def _format_option_list(option_list: List[str], _rank2option: List[str]) -> str:

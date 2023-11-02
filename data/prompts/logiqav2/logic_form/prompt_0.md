@@ -1,0 +1,2 @@
+Convert the input texts following the keywords [Context], [Question] and each [Option] into logic forms.  For each logic form, the format is [predicate](entity 1,  ..., entity n). There is a predicate which indicates the relations among at most n entities and those entities are the arguments of the predicate.   
+Use logical operations to derive the correct option.  Common logical operators include AND, OR, NOT, and ==> (logically implies).
