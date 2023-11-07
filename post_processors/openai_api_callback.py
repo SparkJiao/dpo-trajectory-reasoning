@@ -23,6 +23,24 @@ class MCQAAnswerClean:
         return preds[0]
 
 
+class SeparatorClean:
+    def __init__(self, separator: str = "Finish", separate_idx: int = 1, regrex: str = "A|B|C|D"):
+        self.separator = separator
+        self.separate_idx = separate_idx
+        self.regrex = re.compile(regrex)
+
+    def __call__(self, pred: str):
+        preds = pred.split(self.separator)
+        if len(preds) == 0:
+            return ""
+
+        pred = preds[self.separate_idx]
+        preds = re.findall(self.regrex, pred)
+        if len(preds) == 0:
+            return ""
+        return preds[0]
+
+
 class BinaryAnswerClean:
     def __init__(self, prompt: str = "zero-shot"):
         self.prompt = prompt

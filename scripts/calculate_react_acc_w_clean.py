@@ -12,15 +12,22 @@ data = json.load(open(args.input_file, "r"))
 
 cnt = 0
 tmp = 0
+warning = 0
 for item in data:
     response = item["response"]
     if "Finish[" in response:
         tmp += 1
-        if args.debug and tmp < 10:
+        # if args.debug and tmp < 10:
+        #     print(response)
+        #     print("Label: ", item["label"])
+        #     print("=========================")
+        groups = response.split("Finish[")
+        if len(groups) > 2:
             print(response)
             print("Label: ", item["label"])
             print("=========================")
-        response = response.split("Finish[")[1]
+        # response = response.split("Finish[")[1]
+        response = groups[1]
 
     preds = re.findall(r"A|B|C|D", response)
     if len(preds) == 0:

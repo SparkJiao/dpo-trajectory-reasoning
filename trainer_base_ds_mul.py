@@ -75,6 +75,9 @@ def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine]
     else:
         state_dict = unwrapped_model.state_dict()
 
+    if dist.is_initialized() and cfg.local_rank != 0:
+        dist.barrier()
+
     if cfg.local_rank in [-1, 0]:
         # output_file = os.path.join(output_dir, "pytorch_model.bin")
         # print(f"Saving fp32 state dict to {output_file}")
@@ -86,6 +89,9 @@ def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine]
 
         OmegaConf.save(cfg, os.path.join(output_dir, "training_config.yaml"))
         logger.info("Saving model checkpoint to %s", output_dir)
+
+        if dist.is_initialized():
+            dist.barrier()
 
 
 def forward_step(model, inputs: Dict[str, torch.Tensor]):
@@ -155,7 +161,8 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
 
     if continue_from_global_step > 0:
         logger.info("Fast forwarding to global step %d to resume training from latest checkpoint...", continue_from_global_step)
-        model.load_checkpoint(cfg.resume)
+        resume = os.path.dirname(cfg.resume)
+        model.load_checkpoint(resume)
 
     global_step = 0
     tr_loss, logging_loss = 0.0, 0.0

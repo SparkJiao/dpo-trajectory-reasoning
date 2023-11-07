@@ -27,6 +27,11 @@ from general_util.training_utils import (
 
 logger: logging.Logger
 
+"""
+This script is used for PPO and ReMax training.
+Check the example config `conf/exp/remax/v1_6.yaml`.
+"""
+
 
 def evaluation_by_reward(
         cfg: DictConfig, trainer, tokenizer, print_answers=False, prefix="", _split="dev",

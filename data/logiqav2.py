@@ -21,7 +21,8 @@ templates = [
     "{}\n\nBased on the original description of the problem above and the corresponding logic form. What's the correct answer?\n",
     "{}\n\nThe answer is ",
     "[Context]\n{}\n\n[Question]\n{}\n\n[Options]\n{}\n\nPlease decompose the problem above into smaller ones so that we can solve it separately and reach the final answer by consideing each subproblem and merge the sub-conclusions.\n\n",
-    "[Response]\n{}\n\n[Json]\n"
+    "[Response]\n{}\n\n[Json]\n",
+    "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n",
 ]
 
 
@@ -73,16 +74,27 @@ class ComposePromptGenerator(Dataset):
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  max_data_num: int = -1,
                  api_based: bool = False,
-                 service_based: bool = False, service_processor: Callable = None):
+                 service_based: bool = False, service_processor: Callable = None,
+                 flush_file: str = None, ):
         self.instruction = instruction
         self.few_shot_prompt = few_shot_prompt
         self.compose_keys = compose_keys
         self.input_data: List[Dict[str, Any]] = read_func(file_path)
 
+        flushed_data = {}
+        if flush_file is not None:
+            tmp = open(flush_file, "r").readlines()
+            for line in tmp:
+                item = json.loads(line)
+                flushed_data[item["index"]] = item
+
         self.inputs = []
         self.indices = []
         self.labels = []
         for i in range(len(self.input_data)):
+            if i in flushed_data:
+                continue
+
             _input = ""
             if self.instruction:
                 _input += self.instruction + "\n\n"

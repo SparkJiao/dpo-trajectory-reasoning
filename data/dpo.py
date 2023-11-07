@@ -1,16 +1,14 @@
-import json
-import omegaconf
+import collections
 import json
 import random
 from typing import List, Dict, Tuple, Union, Any, Callable
 
 import torch
-from torch.utils.data import Dataset, default_collate
-from transformers import PreTrainedTokenizer, AutoTokenizer
+from omegaconf.listconfig import ListConfig
+from torch.utils.data import Dataset
+from transformers import PreTrainedTokenizer
 
 from general_util.logger import get_child_logger
-from general_util.tokenization_utils import expand_special_tokenizer, is_seq2seq_tokenizer
-from omegaconf.listconfig import ListConfig
 
 logger = get_child_logger(__name__)
 
@@ -30,7 +28,10 @@ class DPOMergeDataset(Dataset):
 
         reader = DPOPairReader()
         dpo_data = reader(file_path)
-        self.id2dpo_item = {item["id"]: item for item in dpo_data}
+        # self.id2dpo_item = {item["id"]: item for item in dpo_data}
+        self.id2dpo_item = collections.defaultdict(list)
+        for item in dpo_data:
+            self.id2dpo_item[item["id"]].append(item)
 
         original_data = original_reader(original_data_file)
         data = []
@@ -40,12 +41,13 @@ class DPOMergeDataset(Dataset):
             else:
                 item_id = i
             if item_id in self.id2dpo_item:
-                chosen = self.id2dpo_item[item_id]["chosen"]
-                reject = self.id2dpo_item[item_id]["reject"]
-                item["chosen"] = chosen
-                item["reject"] = reject
-                item["index"] = item_id
-                data.append(item)
+                for pair_sample in self.id2dpo_item[item_id]:
+                    chosen = pair_sample["chosen"]
+                    reject = pair_sample["reject"]
+                    item["chosen"] = chosen
+                    item["reject"] = reject
+                    item["index"] = item_id
+                    data.append(item)
 
         logger.info(f"DPOMergeReader: {len(data)} / {len(original_data)}")
         self.data: List[Dict[str, Any]] = data
@@ -128,5 +130,40 @@ class DPOCollator:
             "prompt": prompt,
             "chosen": chosen,
             "reject": reject,
+        }
+        return encoded_inputs
+
+
+class DPODataSFTCollator:
+    def __init__(self, tokenizer: PreTrainedTokenizer, max_seq_length: int):
+        self.tokenizer = tokenizer
+        self.max_seq_length = max_seq_length
+
+    def __call__(self, batch):
+        prompt = [item["prompt"] for item in batch]
+        chosen = [item["chosen"] + self.tokenizer.eos_token for item in batch]
+        indices = [item["index"] for item in batch]
+
+        text_prompts = prompt
+        text_inputs = chosen
+
+        encoded_prompts = self.tokenizer(text_prompts, padding="longest", truncation=True, max_length=self.max_seq_length, return_tensors="pt")
+        input_lens = torch.sum(encoded_prompts["attention_mask"], dim=-1)
+
+        encoded_inputs = self.tokenizer(text_inputs, padding="longest", truncation=True, max_length=self.max_seq_length, return_tensors="pt")
+        if self.tokenizer.padding_side == "left":
+            padding_len = torch.sum(1 - encoded_inputs["attention_mask"], dim=-1)
+            input_lens = input_lens + padding_len
+
+        labels = encoded_inputs["input_ids"].clone()
+        prompt_mask = torch.arange(encoded_inputs["input_ids"].size(1))[None, :] < input_lens[:, None]
+        labels[prompt_mask] = self.tokenizer.pad_token_id
+
+        encoded_inputs["labels"] = labels
+        encoded_inputs["meta_data"] = {
+            "index": indices,
+            "prompt": prompt,
+            "chosen": chosen,
+            "response": chosen,
         }
         return encoded_inputs

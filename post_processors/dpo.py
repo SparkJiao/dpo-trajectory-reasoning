@@ -1,15 +1,13 @@
-import collections
+import json
 import json
 import os
-import re
-from typing import Dict, List, Any, Union, Callable
+from typing import Dict, Any
 
 import numpy as np
 import torch
 from torch import distributed as dist
 
 from post_processors.dist_mixin import DistGatherMixin
-from transformers import AutoTokenizer, PreTrainedTokenizer
 
 
 class DPOEvalPostProcessor(DistGatherMixin):
