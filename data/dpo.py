@@ -28,7 +28,6 @@ class DPOMergeDataset(Dataset):
 
         reader = DPOPairReader()
         dpo_data = reader(file_path)
-        # self.id2dpo_item = {item["id"]: item for item in dpo_data}
         self.id2dpo_item = collections.defaultdict(list)
         for item in dpo_data:
             self.id2dpo_item[item["id"]].append(item)
@@ -44,6 +43,10 @@ class DPOMergeDataset(Dataset):
                 for pair_sample in self.id2dpo_item[item_id]:
                     chosen = pair_sample["chosen"]
                     reject = pair_sample["reject"]
+                    # assert "is_full" in pair_sample, pair_sample  # Just for debug. Please comment this if you're sure the data is correct.
+                    if getattr(pair_sample, "is_full", True):
+                        chosen = chosen + tokenizer.eos_token
+                        reject = reject + tokenizer.eos_token
                     item["chosen"] = chosen
                     item["reject"] = reject
                     item["index"] = item_id
@@ -55,7 +58,6 @@ class DPOMergeDataset(Dataset):
         self.instruction = instruction
         self.few_shot_prompts = few_shot_prompts
         self.compose_keys = compose_keys
-        # assert "response" in self.compose_keys, "Response must be in compose_keys to replace `chosen` or `reject`"
 
     def __len__(self):
         return len(self.data)
@@ -66,12 +68,6 @@ class DPOMergeDataset(Dataset):
             _input += self.instruction + "\n\n"
         if self.few_shot_prompts:
             _input += self.few_shot_prompts + "\n\n"
-        # params = []
-        # for k in self.compose_keys:
-        #     if k == "response":
-        #         params.append(response)
-        #     else:
-        #         params.append(item[k])
         params = [item[k] for k in self.compose_keys]
         prompt = _input + self.template.format(*params)
         output = prompt + response
@@ -105,8 +101,8 @@ class DPOCollator:
 
     def __call__(self, batch):
         prompt = [item["prompt"] for item in batch]
-        chosen = [item["chosen"] + self.tokenizer.eos_token for item in batch]
-        reject = [item["reject"] + self.tokenizer.eos_token for item in batch]
+        chosen = [item["chosen"] for item in batch]
+        reject = [item["reject"] for item in batch]
         indices = [item["index"] for item in batch]
 
         text_prompts = prompt + prompt
@@ -141,7 +137,7 @@ class DPODataSFTCollator:
 
     def __call__(self, batch):
         prompt = [item["prompt"] for item in batch]
-        chosen = [item["chosen"] + self.tokenizer.eos_token for item in batch]
+        chosen = [item["chosen"] for item in batch]
         indices = [item["index"] for item in batch]
 
         text_prompts = prompt

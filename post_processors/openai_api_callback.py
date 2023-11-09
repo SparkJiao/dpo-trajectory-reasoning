@@ -2,7 +2,7 @@ import collections
 import json
 import os
 import re
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 import numpy as np
 
 
@@ -39,6 +39,30 @@ class SeparatorClean:
         if len(preds) == 0:
             return ""
         return preds[0]
+
+
+class ReActSeparatorClean:
+    def __init__(self, separator: str = "Context:", separate_idx: int = 0, regrex: str = "A|B|C|D"):
+        self.separator = separator  # Use for remove generated dummy examples
+        self.separate_idx = separate_idx
+        self.regrex = re.compile(regrex)
+
+    def __call__(self, pred: str):
+        if self.separator in pred:
+            groups = pred.split(self.separator)
+            pred = groups[self.separate_idx]
+
+        if "Finish" in pred:
+            pred = pred.split("Finish")[1]
+            preds = re.findall(self.regrex, pred)
+            if len(preds) == 0:
+                return ""
+            return preds[0]
+
+        preds = re.findall(self.regrex, pred)
+        if len(preds) == 0:
+            return ""
+        return preds[-1]
 
 
 class BinaryAnswerClean:

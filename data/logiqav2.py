@@ -23,6 +23,7 @@ templates = [
     "[Context]\n{}\n\n[Question]\n{}\n\n[Options]\n{}\n\nPlease decompose the problem above into smaller ones so that we can solve it separately and reach the final answer by consideing each subproblem and merge the sub-conclusions.\n\n",
     "[Response]\n{}\n\n[Json]\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n",
+    "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n<Reasoning Start>\n",
 ]
 
 
@@ -31,10 +32,10 @@ def read_single_file(file_path: str, suffix: str = ""):
 
 
 def _format_option_list(option_list: List[str], _rank2option: List[str]) -> str:
-    res = ""
+    res = []
     for op_id, op in enumerate(option_list):
-        res += f"{_rank2option[op_id]}. {op}\n"
-    return res
+        res.append(f"{_rank2option[op_id]}. {op}")
+    return "\n".join(res)
 
 
 class LogicQAReader:

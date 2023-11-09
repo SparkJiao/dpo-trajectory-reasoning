@@ -12,7 +12,7 @@ test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 
 num_shot: 5
 
-output_file: experiments/llama2.7b.chat.logiqav2.step.dpo.A100.w3.v1.0.fix/checkpoint-1600/logiqav2-dev.full.qa.react.v1.0.json
+output_file: experiments/llama2.7b.chat.logiqav2.dpo.A100.w2.v1.0/checkpoint-1600/logiqav2-dev.full.qa.react.v1.0.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -34,9 +34,9 @@ read_tensor:
   service_based: True
   service_processor:
     _target_: data.vllm.VLLMRequestGenerator
-    api_url: http://localhost:6000/v1/completions
+    api_url: http://localhost:8000/v1/completions
     max_tokens: 2048
-    model: llama-2-7b-step-dpo-cp1600
+    model: llama-2-7b-dpo-cp1600
 
 # Dataloader
 num_workers: 96

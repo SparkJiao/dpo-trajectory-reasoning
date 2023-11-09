@@ -9,8 +9,8 @@ hydra:
     - file://conf/
 
 
-train_file: ../merit-v2/openai-api-output/react/logiqav2-train-v1.0.react.1shot.turbo.sample5.dpo.0.95.TO.len2.in4.v0.1.sub_train.json
-dev_file: ../merit-v2/openai-api-output/react/logiqav2-train-v1.0.react.1shot.turbo.sample5.dpo.0.95.TO.len2.in4.v0.1.sub_dev.json
+train_file: ../merit-v2/openai-api-output/react/logiqav2-train-v1.0.react.1shot.turbo.sample5.dpo.0.95.TO.len2.in4.v0.1.full_only.sub_train.json
+dev_file: ../merit-v2/openai-api-output/react/logiqav2-train-v1.0.react.1shot.turbo.sample5.dpo.0.95.TO.len2.in4.v0.1.full_only.sub_dev.json
 test_file:
 
 torch_dtype:
@@ -23,19 +23,11 @@ tokenizer_init:
   padding_side: left
 
 model:
-  _target_: models.llama.LlamaForCausalLMDPO.from_pretrained_with_ref_model
-  beta: 0.1
+  _target_: models.llama.LlamaForCausalLM.from_pretrained
   gradient_checkpointing: True
   pad_token_id: 0
   use_flash_attention_2: True
   torch_dtype: ${torch_dtype}
-  ref_model:
-    _target_: transformers.models.llama.LlamaForCausalLM.from_pretrained
-    pretrained_model_name_or_path: ${model_name_or_path}
-    torch_dtype: ${torch_dtype}
-    use_flash_attention_2: True
-    pad_token_id: 0
-    load_in_8bit: True
 
 
 # Data loading
@@ -51,14 +43,13 @@ read_tensor:
   template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n"
   compose_keys: [ "context", "question", "option_list" ]
 
-
 dist_load_data_barrier: False
 
 extended_vocab:
 
 # Data collator
 collator:
-  _target_: data.dpo.DPOCollator
+  _target_: data.dpo.DPODataSFTCollator
   tokenizer: ${tokenizer_init}
   max_seq_length: 2048
 
@@ -69,10 +60,11 @@ prefetch_factor: 2
 # Wiki path pretrain v8.2
 model_name_or_path: ../pretrained-models/Llama-2-7b-chat-hf
 pretrain:
-resume: ${output_dir}/checkpoint-1600
+resume:
 
-#exp_name: llama2.7b.chat.logiqav2.step.dpo.A100.w3.v1.0
-exp_name: llama2.7b.chat.logiqav2.step.dpo.A100.w3.v1.0.fix  # Fix the <eos> problem.
+#exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w3.v1.0
+exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w4.v1.0
+#exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.A100.w2.v1.0
 exp_notes:
 output_dir: experiments/${exp_name}  # Fix <pad token id>
 
@@ -84,12 +76,12 @@ do_eval: True
 eval_sub_path: checkpoint-100
 
 # Training hyper-parameters
-per_gpu_train_batch_size: 4
-per_gpu_eval_batch_size: 8
+per_gpu_train_batch_size: 6
+per_gpu_eval_batch_size: 16
 #learning_rate: 1e-4
 #learning_rate: 5e-6
-learning_rate: 1e-6
-gradient_accumulation_steps: 2
+learning_rate: 1e-5
+gradient_accumulation_steps: 1
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"
@@ -97,8 +89,8 @@ adam_betas: "(0.9, 0.98)"
 #max_grad_norm: 0.0
 total_dataset_len: -1
 max_grad_norm: 1.0
-num_train_epochs: 3
-max_steps: 0
+num_train_epochs: -1
+max_steps: 16320
 warmup_proportion: 0.01
 warmup_steps: 0
 
@@ -108,9 +100,9 @@ use_nvlamb:
 bit_training:
 
 logging_steps: 5
-save_steps: 400
+save_steps: 200
 save_best: False
-eval_steps: 400
+eval_steps: 200
 ddp_eval: True
 no_cuda: False
 seed: 42
@@ -128,7 +120,7 @@ prediction_cfg:
 eval_forward_fn:
   _target_: general_util.evaluator.DefaultForwardFn
 post_process:
-  _target_: post_processors.dpo.DPOEvalPostProcessor
+  _target_: post_processors.dist_mixin.SFTLossOnlyPostProcessor
 
 ds_cfg:
   train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
@@ -145,10 +137,7 @@ ds_cfg:
 summary_helper:
   _target_: general_util.tensorboard_helper.WandbWriter
   batch_index_or_keys:
-  #    "train/pair_value_num": pair_value_num
   outputs_index_or_keys:
-    "train/chosen_reward": chosen_reward
-    "train/rejected_reward": rejected_reward
 
 # Temporary variables
 n_gpu:
