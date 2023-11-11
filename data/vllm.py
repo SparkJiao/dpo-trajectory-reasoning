@@ -1,6 +1,6 @@
 import requests
 import json
-from typing import List, Iterable, Tuple
+from typing import List, Iterable, Tuple, Union
 from omegaconf.listconfig import ListConfig
 
 from general_util.logger import get_child_logger
@@ -50,13 +50,13 @@ def get_response(response: requests.Response) -> Tuple[str, str]:
 
 class VLLMRequestGenerator:
     def __init__(self, api_url: str, n: int = 1, max_tokens: int = 1024, use_beam_search: bool = False, stream: bool = False,
-                 temperature: float = 0.0, stop: List[str] = ["</s>"], **kwargs):
+                 temperature: float = 0.0, stop: Union[List[str], ListConfig] = ["</s>"], **kwargs):
         self.api_url = api_url
         self.n = n
         self.max_tokens = max_tokens
         self.use_beam_search = use_beam_search
         self.stream = stream
-        self.stop = stop
+        self.stop = stop if isinstance(stop, list) else list(stop)
         self.temperature = temperature
         self.kwargs = kwargs
 

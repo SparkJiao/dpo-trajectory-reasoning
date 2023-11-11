@@ -1,7 +1,7 @@
 from typing import Union, Dict, Tuple, Any
 
 from torch import Tensor
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 from general_util.logger import get_child_logger
 
@@ -10,7 +10,8 @@ logger = get_child_logger("TensorboardHelper")
 
 class SummaryWriterHelper:
     def __init__(self,
-                 writer: SummaryWriter,
+                 # writer: SummaryWriter,
+                 writer,
                  batch_index_or_keys: Dict[str, Union[int, str]] = None,
                  outputs_index_or_keys: Dict[str, Union[int, str]] = None):
         """

@@ -12,8 +12,7 @@ test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 
 num_shot: 5
 
-#output_file: ../pretrained-models/Llama-2-7b-chat-hf/logiqav2-dev.full.qa.react.v1.0.json
-output_file: ../pretrained-models/Llama-2-7b-chat-hf/logiqav2-dev.full.qa.react.v1.1.json
+output_file: experiments/llama2.7b.chat.logiqav2.step.dpo.A100.w2.v2.1/checkpoint-1600/logiqav2-dev.full.qa.react.v1.0.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -22,14 +21,12 @@ read_tensor:
   read_func:
     _target_: data.logiqav2.LogicQAReader
     flat_options: True
-#  template_id: 7
   template_id: 8
   instruction:
     _target_: data.prompts.logiqav2.react.prompts.get_prompt
     prompt_name: react_v2
   few_shot_prompt:
     _target_: data.logiqav2.read_single_file
-#    file_path: data/prompts/logiqav2/react/train_4554_p1.txt
     file_path: data/prompts/logiqav2/react/train_4554.txt
   compose_keys: [ "context", "question", "option_list" ]
   max_data_num: -1
@@ -37,9 +34,10 @@ read_tensor:
   service_based: True
   service_processor:
     _target_: data.vllm.VLLMRequestGenerator
-    api_url: http://localhost:6001/v1/completions
+    api_url: http://0.0.0.0:6000/v1/completions
     max_tokens: 2048
-    model: llama-2-7b-chat
+    model: llama-2-7b-step-dpo-v2.1-cp1600
+    stop: [ "</s>", "\n\n\n\n" ]
 
 # Dataloader
 num_workers: 96

@@ -1,17 +1,11 @@
 import json
-import omegaconf
-import json
-import random
 from typing import List, Dict, Tuple, Union, Any, Callable
 
-import torch
-from torch.utils.data import Dataset, default_collate
-from data.dpo import DPOPairReader
-from transformers import PreTrainedTokenizer, AutoTokenizer
+from omegaconf.listconfig import ListConfig
+from torch.utils.data import Dataset
+from transformers import PreTrainedTokenizer
 
 from general_util.logger import get_child_logger
-from general_util.tokenization_utils import expand_special_tokenizer, is_seq2seq_tokenizer
-from omegaconf.listconfig import ListConfig
 
 logger = get_child_logger(__name__)
 
@@ -24,6 +18,7 @@ templates = [
     "[Response]\n{}\n\n[Json]\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n<Reasoning Start>\n",
+    "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1:"
 ]
 
 

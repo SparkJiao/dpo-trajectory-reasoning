@@ -38,6 +38,10 @@ class DPOModelOutput(ModelOutput):
     policy_rejected_logits: torch.FloatTensor = None
 
 
+def return_single_device_map():
+    return {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
+
+
 class PreTrainedModelPeftMixin(PreTrainedModel):
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], *model_args, **kwargs):

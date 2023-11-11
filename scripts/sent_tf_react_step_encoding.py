@@ -35,6 +35,8 @@ def main():
             node_types.extend(chain_node_types)
             node_rationales.extend(chain_node_rationales)
 
+            assert "Finish[The answer is" in item["nodes"][i][-1]["content"]
+
         node2offset[j][1] = len(node_rationales)
 
     model = FlagModel(args.model_path,

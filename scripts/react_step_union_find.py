@@ -73,11 +73,13 @@ def get_node_unique_id(response_id, node):
 def parse_leaf_node_value(response, label):
     groups = response.split("Finish")
     if len(groups) < 2:
-        # print(f"Warning: Not a valid response: {response}")
+        print(f"Warning: Not a valid response: {response}")
         return 0
     response = groups[1]
     preds = re.findall(r"A|B|C|D", response)
     if len(preds) == 0:
+        return 0
+    elif len(preds) > 1:
         return 0
     else:
         if ord(preds[0]) - ord("A") == label:

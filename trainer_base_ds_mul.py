@@ -34,7 +34,7 @@ from torch import distributed as dist
 from torch.utils.data import (DataLoader, RandomSampler)
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
-from transformers import (AutoTokenizer, PreTrainedTokenizer)
+from transformers import (AutoTokenizer, PreTrainedTokenizer, PreTrainedModel)
 
 from general_util.evaluator import evaluate
 from general_util.logger import setting_logger
@@ -63,7 +63,8 @@ def worker_init_fn(worker_id):
 
 def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine],
                cfg: DictConfig, output_dir: str, tokenizer: PreTrainedTokenizer = None, state_dict: Dict = None):
-    unwrapped_model = unwrap_model(model)
+    unwrapped_model = model.module
+    assert isinstance(unwrapped_model, PreTrainedModel)
     model.save_checkpoint(cfg.output_dir)
 
     logger.info(f"Loading fp32 state dict from {output_dir}")
@@ -73,7 +74,7 @@ def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine]
     elif zero_stage == 2:
         state_dict = get_fp32_state_dict_from_zero_checkpoint(output_dir)
     else:
-        state_dict = unwrapped_model.state_dict()
+        state_dict = model.module.state_dict()
 
     if dist.is_initialized() and cfg.local_rank != 0:
         dist.barrier()
@@ -82,7 +83,7 @@ def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine]
         # output_file = os.path.join(output_dir, "pytorch_model.bin")
         # print(f"Saving fp32 state dict to {output_file}")
         # torch.save(state_dict, output_file)
-        unwrapped_model.save_pretrained(output_dir, state_dict=state_dict)
+        unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, safe_serialization=False)
 
         if tokenizer is not None:
             tokenizer.save_pretrained(output_dir)
@@ -148,6 +149,9 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
                                                           model_parameters=[p for p in model.parameters() if p.requires_grad],
                                                           config=ds_config)
     logger.info(optimizer.optimizer)
+
+    unwrapped_model = model.module
+    assert isinstance(unwrapped_model, PreTrainedModel)
 
     # Train!
     logger.info("***** Running training *****")
@@ -274,7 +278,7 @@ def main(cfg: DictConfig):
     else:  # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
         torch.cuda.set_device(cfg.local_rank)
         device = str(torch.device("cuda", cfg.local_rank))
-        deepspeed.init_distributed(dist_backend="nccl", timeout=datetime.timedelta(seconds=7200))
+        deepspeed.init_distributed(dist_backend="nccl", timeout=datetime.timedelta(seconds=9600))
         cfg.n_gpu = 1
         cfg.world_size = dist.get_world_size()
     cfg.device = device
@@ -399,6 +403,7 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     os.environ["HYDRA_FULL_ERROR"] = "1"
+    os.environ["WANDB__SERVICE_WAIT"] = "600"
 
     hydra_formatted_args = []
     # convert the cli params added by torch.distributed.launch into Hydra format

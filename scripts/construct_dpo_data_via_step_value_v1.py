@@ -14,6 +14,8 @@ def parse_leaf_node_value(response: str, label: int):
     preds = re.findall(r"A|B|C|D", response)
     if len(preds) == 0:
         return 0
+    elif len(preds) > 1:
+        return 0
     else:
         if ord(preds[0]) - ord("A") == label:
             return 1
@@ -159,6 +161,7 @@ def main():
     print(f"Average step sample number: {avg_step_sample_num / len(data)}")
     print(f"Average sample numer: {len(outputs) / len(data)}")
     print(len(outputs))
+    print(len(full_samples))
 
     json.dump(outputs, open(args.output_file, "w"), indent=2, ensure_ascii=False)
     if args.save_full_data:

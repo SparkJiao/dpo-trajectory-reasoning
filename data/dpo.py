@@ -1,7 +1,7 @@
 import collections
 import json
 import random
-from typing import List, Dict, Tuple, Union, Any, Callable
+from typing import List, Dict, Tuple, Union, Any, Callable, Optional
 
 import torch
 from omegaconf.listconfig import ListConfig
@@ -23,7 +23,8 @@ class DPOMergeDataset(Dataset):
     def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
                  original_data_file: str, original_reader: Callable, template: str,
                  instruction: str = "", few_shot_prompts: str = "",
-                 compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"), ):
+                 compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
+                 format_filter: Optional[Callable] = None):
         self.tokenizer = tokenizer
 
         reader = DPOPairReader()
@@ -34,6 +35,7 @@ class DPOMergeDataset(Dataset):
 
         original_data = original_reader(original_data_file)
         data = []
+        abandoned = []
         for i, item in enumerate(original_data):
             if "index" in item:
                 item_id = item["index"]
@@ -41,10 +43,14 @@ class DPOMergeDataset(Dataset):
                 item_id = i
             if item_id in self.id2dpo_item:
                 for pair_sample in self.id2dpo_item[item_id]:
+                    if not format_filter(pair_sample):
+                        abandoned.append(pair_sample)
+                        continue
+
                     chosen = pair_sample["chosen"]
                     reject = pair_sample["reject"]
                     # assert "is_full" in pair_sample, pair_sample  # Just for debug. Please comment this if you're sure the data is correct.
-                    if getattr(pair_sample, "is_full", True):
+                    if "is_full" not in pair_sample or pair_sample["is_full"]:
                         chosen = chosen + tokenizer.eos_token
                         reject = reject + tokenizer.eos_token
                     item["chosen"] = chosen
@@ -58,6 +64,9 @@ class DPOMergeDataset(Dataset):
         self.instruction = instruction
         self.few_shot_prompts = few_shot_prompts
         self.compose_keys = compose_keys
+
+        if format_filter:
+            logger.info(f"Abandoned some of non-format examples:\n{len(abandoned[:10])}")
 
     def __len__(self):
         return len(self.data)
@@ -75,6 +84,120 @@ class DPOMergeDataset(Dataset):
 
     def __getitem__(self, index):
         item = self.data[index]
+        chosen = item["chosen"]
+        reject = item["reject"]
+        if isinstance(chosen, list):
+            chosen = random.choice(chosen)
+        if isinstance(reject, list):
+            reject = random.choice(reject)
+
+        chosen_prompt, chosen_input = self.compose_input(item, chosen)
+        reject_prompt, reject_input = self.compose_input(item, reject)
+        assert chosen_prompt == reject_prompt, (chosen_prompt, reject_prompt)
+
+        return {
+            "prompt": chosen_prompt,
+            "chosen": chosen_input,
+            "reject": reject_input,
+            "index": item["index"],
+        }
+
+
+class ReActFormat:
+    def __call__(self, item):
+        end_format = "Finish["
+        lines = item["chosen"].split("\n")
+        cnt = len([line for line in lines if end_format in line])
+        if "is_full" not in item or item["is_full"]:
+            if cnt > 1:
+                return False
+        else:
+            if cnt > 0:
+                return False
+        return True
+
+
+class DPOMergeBalanceDataset(Dataset):
+    def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
+                 original_data_file: str, original_reader: Callable, template: str,
+                 instruction: str = "", few_shot_prompts: str = "",
+                 compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
+                 balance_ratio: float = 1.0,
+                 format_filter: Optional[Callable] = None,
+                 ):
+        self.tokenizer = tokenizer
+
+        reader = DPOPairReader()
+        dpo_data = reader(file_path)
+        self.id2dpo_item = collections.defaultdict(list)
+        for item in dpo_data:
+            self.id2dpo_item[item["id"]].append(item)
+
+        original_data = original_reader(original_data_file)
+        full_data = []
+        part_data = []
+        abandoned = []
+        for i, item in enumerate(original_data):
+            if "index" in item:
+                item_id = item["index"]
+            else:
+                item_id = i
+            if item_id in self.id2dpo_item:
+                for pair_sample in self.id2dpo_item[item_id]:
+                    if not format_filter(pair_sample):
+                        abandoned.append(pair_sample)
+                        continue
+
+                    chosen = pair_sample["chosen"]
+                    reject = pair_sample["reject"]
+                    # assert "is_full" in pair_sample, pair_sample  # Just for debug. Please comment this if you're sure the data is correct.
+                    if "is_full" not in pair_sample or pair_sample["is_full"]:
+                        chosen = chosen + tokenizer.eos_token
+                        reject = reject + tokenizer.eos_token
+
+                    item["chosen"] = chosen
+                    item["reject"] = reject
+                    item["index"] = item_id
+
+                    if "is_full" not in pair_sample or pair_sample["is_full"]:
+                        full_data.append(item)
+                    else:
+                        part_data.append(item)
+
+        logger.info("DPOMergeReader: {} / {} / {}".format(len(full_data), len(part_data), len(original_data)))
+        self.full_data: List[Dict[str, Any]] = full_data
+        self.part_data: List[Dict[str, Any]] = part_data
+        self.template = template
+        self.instruction = instruction
+        self.few_shot_prompts = few_shot_prompts
+        self.compose_keys = compose_keys
+        self.balance_ratio = balance_ratio
+
+        if format_filter:
+            logger.info(f"Abandoned some of non-format examples:\n{len(abandoned[:10])}")
+
+    def __len__(self):
+        return len(self.full_data) + int(len(self.part_data) * self.balance_ratio)
+
+    def compose_input(self, item, response: str):
+        _input = ""
+        if self.instruction:
+            _input += self.instruction + "\n\n"
+        if self.few_shot_prompts:
+            _input += self.few_shot_prompts + "\n\n"
+        params = [item[k] for k in self.compose_keys]
+        prompt = _input + self.template.format(*params)
+        output = prompt + response
+        return prompt, output
+
+    def __getitem__(self, index):
+        # item = self.data[index]
+        if index < len(self.full_data):
+            item = self.full_data[index]
+        else:
+            # Randomly select sample from partial data
+            item = random.choice(self.part_data)
+
         chosen = item["chosen"]
         reject = item["reject"]
         if isinstance(chosen, list):
