@@ -7,6 +7,11 @@ from typing import List, Any, Dict, Tuple
 import re
 
 
+r""" Updates from version 1:
+   1. Add a field to ```cluster2value``` to record the degree of the cluster.
+"""
+
+
 class UnionFind:
     def __init__(self, n):
         self.parent = list(range(n))
@@ -98,23 +103,21 @@ def dfs(tree, cluster_id, cluster2value, cluster2nodes, label):
                 assert leaf_node["is_leaf"], f"Warning: {leaf_node} is not a leaf node."
                 value += parse_leaf_node_value(leaf_node["content"], label)
             value /= len(cluster2nodes[cluster_id])
-            cluster2value[cluster_id] = value
+            cluster2value[cluster_id] = {"value": value, "degree": 0}
         return
 
-    cluster2value[cluster_id] = 0
+    cluster2value[cluster_id] = {"value": 0, "degree": len(tree[cluster_id])}
     for child_cluster_id in tree[cluster_id]:
         if child_cluster_id in cluster2value:
             continue
         dfs(tree, child_cluster_id, cluster2value, cluster2nodes, label)
-        cluster2value[cluster_id] += cluster2value[child_cluster_id]
-    cluster2value[cluster_id] /= len(tree[cluster_id])
+        cluster2value[cluster_id]["value"] += cluster2value[child_cluster_id]["value"]
+    cluster2value[cluster_id]["value"] /= cluster2value[cluster_id]["degree"]
 
 
 def dfs_entrance(cluster2value, nodes_list, tree, cluster2nodes, label):
     for response_id, nodes in enumerate(nodes_list):
         for node in nodes:
-            # node_unique_id = get_node_unique_id(response_id, node)
-            # cluster_id = node2cluster[node_unique_id]
             cluster_id = node["cluster"]
             if cluster_id not in cluster2value:
                 dfs(tree, cluster_id, cluster2value, cluster2nodes, label)

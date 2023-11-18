@@ -65,14 +65,20 @@ def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine]
                cfg: DictConfig, output_dir: str, tokenizer: PreTrainedTokenizer = None, state_dict: Dict = None):
     unwrapped_model = model.module
     assert isinstance(unwrapped_model, PreTrainedModel)
-    model.save_checkpoint(cfg.output_dir)
 
-    logger.info(f"Loading fp32 state dict from {output_dir}")
+    save_ds_state = getattr(cfg, "save_ds_state", True)
     zero_stage = get_zero_stage(cfg.ds_cfg)
+
+    if not save_ds_state:
+        if zero_stage == 3:
+            logger.warning("Deepspeed ZeRO-3 has to save checkpoint states since the model is sharded.")
+            saving_ds_state = True
+
+    if save_ds_state:
+        model.save_checkpoint(cfg.output_dir)
+
     if zero_stage == 3:
         state_dict = model._zero3_consolidated_16bit_state_dict()
-    elif zero_stage == 2:
-        state_dict = get_fp32_state_dict_from_zero_checkpoint(output_dir)
     else:
         state_dict = model.module.state_dict()
 
@@ -80,9 +86,6 @@ def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine]
         dist.barrier()
 
     if cfg.local_rank in [-1, 0]:
-        # output_file = os.path.join(output_dir, "pytorch_model.bin")
-        # print(f"Saving fp32 state dict to {output_file}")
-        # torch.save(state_dict, output_file)
         unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, safe_serialization=False)
 
         if tokenizer is not None:
@@ -166,7 +169,19 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
     if continue_from_global_step > 0:
         logger.info("Fast forwarding to global step %d to resume training from latest checkpoint...", continue_from_global_step)
         resume = os.path.dirname(cfg.resume)
+        # resume = cfg.resume.replace("checkpoint-", "global_step")
+        # resume_dir = os.path.dirname(cfg.resume)
+        # tag = open(os.path.join(resume_dir, "latest"), "r").read().strip()
         model.load_checkpoint(resume)
+
+    if cfg.local_rank in [-1, 0]:
+        wandb.init(
+            project="llm-reasoning",
+            name=cfg.exp_name,
+            notes=cfg.exp_notes,
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.define_metric(cfg.prediction_cfg.metric, summary=("max" if cfg.prediction_cfg.measure > 0 else "min"))
 
     global_step = 0
     tr_loss, logging_loss = 0.0, 0.0
@@ -326,14 +341,6 @@ def main(cfg: DictConfig):
             os.makedirs(cfg.output_dir)
         OmegaConf.save(cfg, os.path.join(cfg.output_dir, "training_config.yaml"))
 
-        wandb.init(
-            project="llm-reasoning",
-            name=cfg.exp_name,
-            notes=cfg.exp_notes,
-            config=OmegaConf.to_container(cfg, resolve=True),
-        )
-        wandb.define_metric(cfg.prediction_cfg.metric, summary=("max" if cfg.prediction_cfg.measure > 0 else "min"))
-
     # Training
     if cfg.do_train:
         continue_from_global_step = 0  # If set to 0, start training from the beginning
@@ -403,7 +410,10 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     os.environ["HYDRA_FULL_ERROR"] = "1"
-    os.environ["WANDB__SERVICE_WAIT"] = "600"
+    os.environ["WANDB__SERVICE_WAIT"] = "1200"
+    print(os.environ)
+    os.environ["NCCL_BLOCKING_WAIT"] = "1"
+    os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1"
 
     hydra_formatted_args = []
     # convert the cli params added by torch.distributed.launch into Hydra format

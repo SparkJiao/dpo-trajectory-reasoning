@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from logging import Logger
-from typing import Optional, Union, Tuple, List
+from typing import Optional, Union, Tuple, List, Callable
 
 import hydra
 import omegaconf
@@ -124,7 +124,6 @@ class PreTrainedModelPeftMixin(PreTrainedModel):
         return model
 
 
-@torch.cuda.amp.autocast(enabled=True, dtype=torch.float32)
 def llama_dpo_batch_forward(model: HfLlamaForCausalLM, input_ids: torch.LongTensor, attention_mask: torch.Tensor, labels: torch.LongTensor):
     outputs = model.model(
         input_ids=input_ids,

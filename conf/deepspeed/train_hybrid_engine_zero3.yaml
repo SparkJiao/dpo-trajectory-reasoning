@@ -4,7 +4,7 @@ scheduler:
   type: WarmupDecayLR
   params:
     total_num_steps:
-    warmup_max_lr:
+    warmup_max_lr: ${learning_rate}
     warmup_num_steps:
     warmup_type: linear
 optimizer:
@@ -17,7 +17,7 @@ optimizer:
 bf16:
   enabled: True
 zero_optimization:
-  stage: 1
+  stage: 3
 #  offload_optimizer:
 #    device: cpu
 #    pin_memory: True

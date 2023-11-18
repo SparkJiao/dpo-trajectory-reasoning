@@ -10,10 +10,9 @@ train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
 dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 
-step: 4400
+step: 1200
 
-#output_file: experiments/llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w2.v2.0/checkpoint-1600/logiqav2-dev.full.qa.react.v1.0.json
-output_file: experiments/llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w2.v2.0/checkpoint-${step}/logiqav2-dev.full.qa.react.v1.0.json
+output_file: experiments/llama2.7b.chat.logiqav2.step.dpo.A40.w4.v4.0/checkpoint-${step}/logiqav2-dev.full.qa.react.v1.0.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -35,13 +34,14 @@ read_tensor:
   service_based: True
   service_processor:
     _target_: data.vllm.VLLMRequestGenerator
+#    api_url: http://0.0.0.0:8000/v1/completions
     api_url: http://0.0.0.0:6000/v1/completions
     max_tokens: 2048
-    model: llama-2-7b-sft-v2.1-cp${step}
+    model: llama-2-7b-step-dpo-v4.0-cp${step}
     stop: [ "</s>", "\n\n\n\n" ]
 
 # Dataloader
-num_workers: 96
+num_workers: 48
 prefetch_factor: 2
 
 output_dir:

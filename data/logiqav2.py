@@ -1,3 +1,4 @@
+import copy
 import json
 from typing import List, Dict, Tuple, Union, Any, Callable
 
@@ -19,6 +20,7 @@ templates = [
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n<Reasoning Start>\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1:"
+    "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"  # Continue from the previous one for response composition.
 ]
 
 
@@ -64,6 +66,34 @@ class LogicQAReader:
         ]
 
 
+class SubResponseMergeReader(LogicQAReader):
+    def __init__(self, inter_states_file: str, flat_options: bool = False):
+        super().__init__(flat_options)
+        self.inter_states = json.load(open(inter_states_file, "r"))
+
+    def __call__(self, file):
+        """
+        :param file: The original data of LogiQA-v2.
+        :return:
+        """
+        original_data = super().__call__(file)
+        id2original_data = {idx: item for idx, item in enumerate(original_data)}
+
+        outputs = []
+        for item in self.inter_states:
+            idx = item["index"]
+            # if idx not in id2original_data:
+            #     continue
+            assert idx in id2original_data, idx
+            original_item = id2original_data[idx]
+            for state_id, state in enumerate(item["inter_states"]):
+                new_item = copy.deepcopy(original_item)
+                new_item["response"] = state
+                new_item["id"] = f"{idx}_{state_id}"
+                outputs.append(new_item)
+        return outputs
+
+
 class ComposePromptGenerator(Dataset):
     def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer, read_func, template_id: int = 0,
                  instruction: str = "", few_shot_prompt: str = "",
@@ -101,7 +131,10 @@ class ComposePromptGenerator(Dataset):
             _input += templates[template_id].format(*params)
 
             self.inputs.append(_input)
-            self.indices.append(i)
+            if "id" in self.input_data[i]:
+                self.indices.append(self.input_data[i]["id"])
+            else:
+                self.indices.append(i)
             self.labels.append(self.input_data[i]["label"])
 
         self.tokenizer = tokenizer

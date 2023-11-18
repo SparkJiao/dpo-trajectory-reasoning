@@ -36,7 +36,7 @@ zero_optimization:
   stage3_max_live_parameters: 1e8  # (3e7, 1e9)
   stage3_prefetch_bucket_size: 1e8  # (3e7, 5e8)
   memory_efficient_linear: False
-steps_per_print: 10
+steps_per_print: 25
 gradient_clipping: 1.0
 prescale_gradients: False
 #wall_clock_breakdown: False
