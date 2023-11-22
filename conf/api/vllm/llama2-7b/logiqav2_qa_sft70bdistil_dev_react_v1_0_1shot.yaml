@@ -1,0 +1,72 @@
+defaults:
+  - hydra: default
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+
+step: 1600
+
+output_file: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-${step}/logiqav2-dev.full.qa.react.v1.0.1shot.json
+flush_file: ${output_file}l
+
+# Data loading
+read_tensor:
+  _target_: data.logiqav2.ComposePromptGenerator
+  read_func:
+    _target_: data.logiqav2.LogicQAReader
+    flat_options: True
+  template_id: 8
+  instruction:
+    _target_: data.prompts.logiqav2.react.prompts.get_prompt
+    prompt_name: react_v2
+  few_shot_prompt:
+    _target_: data.logiqav2.read_single_file
+    file_path: data/prompts/logiqav2/react/train_4554.txt
+  compose_keys: [ "context", "question", "option_list" ]
+  max_data_num: -1
+  api_based: False
+  service_based: True
+  service_processor:
+    _target_: data.vllm.VLLMRequestGenerator
+    api_url: http://0.0.0.0:6000/v1/completions
+    max_tokens: 2048
+    model: llama-2-7b-sft70b-v1.0-cp1600
+    stop: [ "</s>", "\n\n\n\n" ]
+
+# Dataloader
+num_workers: 48
+prefetch_factor: 2
+
+output_dir:
+
+post_process:
+  _target_: post_processors.openai_api_callback.OpenAICallBack
+  output_file: ${output_file}
+  answer_clean:
+    _target_: post_processors.openai_api_callback.ReActSeparatorClean
+#    prompt: "few-shot"
+#    separator: "Finish"
+#    separate_idx: 1
+
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

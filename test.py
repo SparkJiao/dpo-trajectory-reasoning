@@ -14,7 +14,7 @@ def main(cfg: DictConfig):
     # t = open("step3_rlhf_finetuning/README.md", "r").read()
     # print(t)
     print(cfg)
-    print(cfg.test_resolve)
+    # print(cfg.test_resolve)
 
 
 if __name__ == "__main__":

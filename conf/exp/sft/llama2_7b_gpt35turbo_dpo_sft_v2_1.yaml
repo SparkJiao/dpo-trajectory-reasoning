@@ -1,16 +1,16 @@
 defaults:
   - hydra: default
   - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
-#  - deepspeed@ds_cfg: train_hybrid_engine_zero2_optim_offload
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero2
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
 
 hydra:
   searchpath:
     - file://conf/
 
-data_dir: experiments/llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w2.v2.0/checkpoint-1600
-train_file: ${data_dir}/logiqav2-train.full.qa.react.v1.0.1shot.sample20.clean_nodes.cluster.t0.95.TO.len2.in4.v0.1.full_only.sub_train.json
-dev_file: ${data_dir}/logiqav2-train.full.qa.react.v1.0.1shot.sample20.clean_nodes.cluster.t0.95.TO.len2.in4.v0.1.full_only.sub_dev.json
+
+train_file: data/trajectory/react/logiqav2-train-v1.0.react.1shot.turbo.sample5.clean_dpo.chosen.sub_train.json
+dev_file: data/trajectory/react/logiqav2-train-v1.0.react.1shot.turbo.sample5.clean_dpo.chosen.sub_dev.json
 test_file:
 
 torch_dtype:
@@ -22,25 +22,14 @@ tokenizer_init:
   tokenizer_path: ${model_name_or_path}
   padding_side: left
 
-device_map:
-  _target_: models.llama.return_single_device_map
-
 model:
-  _target_: models.llama.LlamaForCausalLMDPO.from_pretrained_with_ref_model
-  beta: 0.1
+  _target_: models.llama.LlamaForCausalLM.from_pretrained
   gradient_checkpointing: True
   pad_token_id: 0
   use_flash_attention_2: True
   torch_dtype: ${torch_dtype}
-  device_map: ${device_map}
-  ref_model:
-    _target_: transformers.models.llama.LlamaForCausalLM.from_pretrained
-    pretrained_model_name_or_path: ${model_name_or_path}
-    torch_dtype: ${torch_dtype}
-    use_flash_attention_2: True
-    pad_token_id: 0
-    device_map: ${device_map}
-    load_in_8bit: True  # 8-bit cannot use on H100
+  device_map:
+    _target_: models.llama.return_single_device_map
 
 
 # Data loading
@@ -58,14 +47,13 @@ read_tensor:
   format_filter:
     _target_: data.dpo.ReActFormat
 
-
 dist_load_data_barrier: False
 
 extended_vocab:
 
 # Data collator
 collator:
-  _target_: data.dpo.DPOCollator
+  _target_: data.dpo.DPODataSFTCollator
   tokenizer: ${tokenizer_init}
   max_seq_length: 2048
 
@@ -74,31 +62,34 @@ num_workers: 8
 prefetch_factor: 2
 
 # Wiki path pretrain v8.2
-model_name_or_path: experiments/llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w2.v2.0/checkpoint-1600
+model_name_or_path: ../pretrained-models/Llama-2-7b-chat-hf
 pretrain:
-#resume: ${output_dir}/checkpoint-800
+resume:
 
-#exp_name: llama2.7b.chat.logiqav2.dpo.A100.w4.v4.1
-exp_name: llama2.7b.chat.logiqav2.dpo.A40.w4.v4.1
+#exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w3.v1.0
+#exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w4.v1.0
+#exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.A100.w2.v1.0
+#exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w2.v1.1  # This also fixed the `is_full` bug.
+#exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.A100.w2.v2.0
+#exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w2.v2.0
+exp_name: llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.A40.w4.v2.1 # Only change the environments to obtain all-step weights.
 exp_notes:
-output_dir: experiments/${exp_name}
+output_dir: experiments/${exp_name}  # Fix <pad token id>
 
 
 do_train: True
 evaluate_during_training: True
 
-do_eval: False
+do_eval: True
 eval_sub_path: checkpoint-100
 
 # Training hyper-parameters
-#per_gpu_train_batch_size: 1
-per_gpu_train_batch_size: 1  # H100
-per_gpu_eval_batch_size: 2
+per_gpu_train_batch_size: 6
+per_gpu_eval_batch_size: 12
 #learning_rate: 1e-4
 #learning_rate: 5e-6
-learning_rate: 1e-6
-#gradient_accumulation_steps: 16
-gradient_accumulation_steps: 16
+learning_rate: 1e-5
+gradient_accumulation_steps: 1
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"
@@ -106,10 +97,10 @@ adam_betas: "(0.9, 0.98)"
 #max_grad_norm: 0.0
 total_dataset_len: -1
 max_grad_norm: 1.0
-num_train_epochs: 1
+num_train_epochs: 6
 max_steps: 0
-warmup_proportion: 0
-warmup_steps: 200
+warmup_proportion: 0.01
+warmup_steps: 0
 
 # Optimizer
 optimizer:
@@ -117,8 +108,8 @@ use_nvlamb:
 bit_training:
 
 logging_steps: 5
-save_ds_state: False
 save_steps: 400
+save_ds_state: False
 save_best: False
 eval_steps: 400
 ddp_eval: True
@@ -138,7 +129,7 @@ prediction_cfg:
 eval_forward_fn:
   _target_: general_util.evaluator.DefaultForwardFn
 post_process:
-  _target_: post_processors.dpo.DPOEvalPostProcessor
+  _target_: post_processors.dist_mixin.SFTLossOnlyPostProcessor
 
 ds_cfg:
   train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
@@ -155,10 +146,7 @@ ds_cfg:
 summary_helper:
   _target_: general_util.tensorboard_helper.WandbWriter
   batch_index_or_keys:
-  #    "train/pair_value_num": pair_value_num
   outputs_index_or_keys:
-    "train/chosen_reward": chosen_reward
-    "train/rejected_reward": rejected_reward
 
 # Temporary variables
 n_gpu:

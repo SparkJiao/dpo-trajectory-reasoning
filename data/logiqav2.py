@@ -19,7 +19,7 @@ templates = [
     "[Response]\n{}\n\n[Json]\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n<Reasoning Start>\n",
-    "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1:"
+    "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1:",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"  # Continue from the previous one for response composition.
 ]
 
@@ -81,7 +81,7 @@ class SubResponseMergeReader(LogicQAReader):
 
         outputs = []
         for item in self.inter_states:
-            idx = item["index"]
+            idx = item["id"]
             # if idx not in id2original_data:
             #     continue
             assert idx in id2original_data, idx

@@ -1,0 +1,21 @@
+_target_: data.logiqav2.ComposePromptGenerator
+read_func:
+  _target_: data.logiqav2.LogicQAReader
+  flat_options: True
+template_id: 8
+instruction:
+  _target_: data.prompts.logiqav2.react.prompts.get_prompt
+  prompt_name: react_v2
+few_shot_prompt:
+  _target_: data.logiqav2.read_single_file
+  file_path: data/prompts/logiqav2/react/train_4554.txt
+compose_keys: [ "context", "question", "option_list" ]
+max_data_num: -1
+api_based: False
+service_based: True
+service_processor:
+  _target_: data.vllm.VLLMRequestGenerator
+  api_url: http://0.0.0.0:${port}/v1/completions
+  max_tokens: 2048
+  model: ${model}
+  stop: [ "</s>", "\n\n\n\n" ]

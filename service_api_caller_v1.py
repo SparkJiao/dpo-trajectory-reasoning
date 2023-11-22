@@ -48,7 +48,7 @@ def run_inference(cfg: DictConfig, dataset):
     # Eval!
     logger.info("***** Running inference through OpenAI API *****")
     logger.info("  Num examples = %d", len(dataset))
-    logger.info("  Batch size = %d", cfg.per_gpu_eval_batch_size)
+    logger.info("  Batch size = %d", 1)
 
     eval_dataloader = DataLoader(dataset,
                                  # sampler=eval_sampler,
@@ -66,14 +66,7 @@ def run_inference(cfg: DictConfig, dataset):
 
         # outputs = model(**batch)
         outputs = batch
-
-        if any(hasattr(post_processor, tmp) for tmp in ["gather", "gather_object"]):
-            kwargs = {
-                "ddp": cfg.ddp_eval and cfg.local_rank != -1
-            }
-        else:
-            kwargs = {}
-        post_processor(meta_data, outputs, **kwargs)
+        post_processor(meta_data, outputs)
 
     sig = inspect.signature(post_processor.get_results)
     post_kwargs = {}

@@ -1,7 +1,9 @@
 defaults:
   - hydra: default
-  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
+  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload  # Zero-1 w/ Optimizer offlad works on 4*A40 with 140 hours per epoch.  224GB CPU memory
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero2_optim_offload
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero2
+  #  - deepspeed@ds_cfg: train_hybrid_engine_zero3  # Zero-3 works on 4*A40 300 hours per epoch
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
 
 hydra:
@@ -9,8 +11,11 @@ hydra:
     - file://conf/
 
 data_dir: experiments/llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w2.v2.0/checkpoint-1600
-train_file: ${data_dir}/logiqav2-train.full.qa.react.v1.0.1shot.sample20.clean_nodes.cluster.t0.95.TO.len2.in4.v0.1.full_only.sub_train.json
-dev_file: ${data_dir}/logiqav2-train.full.qa.react.v1.0.1shot.sample20.clean_nodes.cluster.t0.95.TO.len2.in4.v0.1.full_only.sub_dev.json
+full_train_file: ${data_dir}/logiqav2-train.full.qa.react.v1.0.1shot.sample20.clean_nodes.cluster.t0.95.TO.len2.in4.v0.1.full_only.sub_train.json
+full_dev_file: ${data_dir}/logiqav2-train.full.qa.react.v1.0.1shot.sample20.clean_nodes.cluster.t0.95.TO.len2.in4.v0.1.full_only.sub_dev.json
+
+train_file: ${data_dir}/logiqav2-train.full.qa.react.v1.0.0shot.inter_completion.pair_diff3.json
+dev_file: ${full_dev_file}
 test_file:
 
 torch_dtype:
@@ -40,11 +45,28 @@ model:
     use_flash_attention_2: True
     pad_token_id: 0
     device_map: ${device_map}
-    load_in_8bit: True  # 8-bit cannot use on H100
 
 
 # Data loading
-read_tensor:
+read_tensor_train:
+  _target_: data.dpo.DPOMergeDataset
+  original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+  original_reader:
+    _target_: data.logiqav2.LogicQAReader
+    flat_options: True
+  instruction:
+    _target_: data.prompts.logiqav2.react.prompts.get_prompt
+    prompt_name: react_v2
+  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n"
+  reader:
+    _target_: data.dpo.DPOReaderAux
+    extra_file: ${full_train_file}
+  compose_keys: [ "context", "question", "option_list" ]
+  format_filter:
+    _target_: data.dpo.ReActFormat
+
+
+read_tensor_dev:
   _target_: data.dpo.DPOMergeDataset
   original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
   original_reader:
@@ -57,7 +79,6 @@ read_tensor:
   compose_keys: [ "context", "question", "option_list" ]
   format_filter:
     _target_: data.dpo.ReActFormat
-
 
 dist_load_data_barrier: False
 
@@ -76,10 +97,10 @@ prefetch_factor: 2
 # Wiki path pretrain v8.2
 model_name_or_path: experiments/llama2.7b.chat.logiqav2.gpt35turbo-dpo-sft.H100.w2.v2.0/checkpoint-1600
 pretrain:
-#resume: ${output_dir}/checkpoint-800
+resume:
 
-#exp_name: llama2.7b.chat.logiqav2.dpo.A100.w4.v4.1
-exp_name: llama2.7b.chat.logiqav2.dpo.A40.w4.v4.1
+#exp_name: llama2.7b.chat.logiqav2.step.dpo.H100.w4.v5.0
+exp_name: llama2.7b.chat.logiqav2.step.dpo.H100.w2.v5.2  # Fix the `is_full` example.
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -91,14 +112,12 @@ do_eval: False
 eval_sub_path: checkpoint-100
 
 # Training hyper-parameters
-#per_gpu_train_batch_size: 1
-per_gpu_train_batch_size: 1  # H100
-per_gpu_eval_batch_size: 2
+per_gpu_train_batch_size: 4
+per_gpu_eval_batch_size: 8
 #learning_rate: 1e-4
 #learning_rate: 5e-6
 learning_rate: 1e-6
-#gradient_accumulation_steps: 16
-gradient_accumulation_steps: 16
+gradient_accumulation_steps: 8
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"

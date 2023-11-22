@@ -1,0 +1,37 @@
+defaults:
+  - hydra: default
+  - reader/logiqav2@read_tensor: react_service_0shot_v1_0
+  - post_process: openai_react
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+
+step: 800
+port: 6000
+exp_dir:
+model:
+
+output_file: ${exp_dir}/checkpoint-${step}/logiqav2-dev.full.qa.react.v1.0.0shot.json
+flush_file: ${output_file}l
+
+# Dataloader
+num_workers: 48
+prefetch_factor: 2
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

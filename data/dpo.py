@@ -19,15 +19,56 @@ class DPOPairReader:
         return data
 
 
-class DPOMergeDataset(Dataset):
+class DPOReaderAux(DPOPairReader):
+    def __init__(self, extra_file):
+        self.extra_file = extra_file
+
+    def __call__(self, file):
+        files = [file] + [self.extra_file]
+        data = []
+        for file in files:
+            data += super().__call__(file)
+        return data
+
+
+class ComposeDatasetMixin(Dataset):
+    def __init__(self, template: str = "", instruction: str = "", few_shot_prompts: str = "",
+                 compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
+                 ):
+        self.template = template
+        self.instruction = instruction
+        self.few_shot_prompts = few_shot_prompts
+        self.compose_keys = compose_keys
+
+    def __len__(self):
+        raise NotImplementedError
+
+    def __getitem__(self, index):
+        raise NotImplementedError
+
+    def compose_input(self, item, response: str):
+        _input = ""
+        if self.instruction:
+            _input += self.instruction + "\n\n"
+        if self.few_shot_prompts:
+            _input += self.few_shot_prompts + "\n\n"
+        params = [item[k] for k in self.compose_keys]
+        prompt = _input + self.template.format(*params)
+        output = prompt + response
+        return prompt, output
+
+
+class DPOMergeDataset(ComposeDatasetMixin):
     def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
                  original_data_file: str, original_reader: Callable, template: str,
+                 reader=DPOPairReader(),
                  instruction: str = "", few_shot_prompts: str = "",
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  format_filter: Optional[Callable] = None):
+        super().__init__(template, instruction, few_shot_prompts, compose_keys)
+
         self.tokenizer = tokenizer
 
-        reader = DPOPairReader()
         dpo_data = reader(file_path)
         self.id2dpo_item = collections.defaultdict(list)
         for item in dpo_data:
@@ -71,17 +112,6 @@ class DPOMergeDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def compose_input(self, item, response: str):
-        _input = ""
-        if self.instruction:
-            _input += self.instruction + "\n\n"
-        if self.few_shot_prompts:
-            _input += self.few_shot_prompts + "\n\n"
-        params = [item[k] for k in self.compose_keys]
-        prompt = _input + self.template.format(*params)
-        output = prompt + response
-        return prompt, output
-
     def __getitem__(self, index):
         item = self.data[index]
         chosen = item["chosen"]
@@ -99,6 +129,82 @@ class DPOMergeDataset(Dataset):
             "prompt": chosen_prompt,
             "chosen": chosen_input,
             "reject": reject_input,
+            "index": item["index"],
+        }
+
+
+class DPOSFTDataset(ComposeDatasetMixin):
+    def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
+                 original_data_file: str, original_reader: Callable, template: str,
+                 reader: Optional[Callable] = DPOPairReader(),
+                 instruction: str = "", few_shot_prompts: str = "",
+                 compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
+                 format_filter: Optional[Callable] = None):
+        super().__init__(template, instruction, few_shot_prompts, compose_keys)
+        self.tokenizer = tokenizer
+
+        dpo_data = reader(file_path)
+        # Filter chosen data
+        chosen_set = set()
+        filtered_data = []
+        for item in dpo_data:
+            if item["chosen"] in chosen_set:
+                continue
+            chosen_set.add(item["chosen"])
+            filtered_data.append(item)
+        dpo_data = filtered_data
+
+        self.id2dpo_item = collections.defaultdict(list)
+        for item in dpo_data:
+            self.id2dpo_item[item["id"]].append(item)
+
+        original_data = original_reader(original_data_file)
+        data = []
+        abandoned = []
+        for i, item in enumerate(original_data):
+            if "index" in item:
+                item_id = item["index"]
+            else:
+                item_id = i
+            if item_id in self.id2dpo_item:
+                for pair_sample in self.id2dpo_item[item_id]:
+                    if not format_filter(pair_sample):
+                        abandoned.append(pair_sample)
+                        continue
+
+                    chosen = pair_sample["chosen"]
+                    # assert "is_full" in pair_sample, pair_sample  # Just for debug. Please comment this if you're sure the data is correct.
+                    if "is_full" not in pair_sample or pair_sample["is_full"]:
+                        chosen = chosen + tokenizer.eos_token
+
+                    item["chosen"] = chosen
+                    item["index"] = item_id
+                    data.append(item)
+
+        logger.info(f"DPOMergeReader: {len(data)} / {len(original_data)}")
+        self.data: List[Dict[str, Any]] = data
+        self.template = template
+        self.instruction = instruction
+        self.few_shot_prompts = few_shot_prompts
+        self.compose_keys = compose_keys
+
+        if format_filter:
+            logger.info(f"Abandoned some of non-format examples:\n{len(abandoned[:10])}")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        item = self.data[index]
+        chosen = item["chosen"]
+        if isinstance(chosen, list):
+            chosen = random.choice(chosen)
+
+        chosen_prompt, chosen_input = self.compose_input(item, chosen)
+
+        return {
+            "prompt": chosen_prompt,
+            "chosen": chosen_input,
             "index": item["index"],
         }
 
@@ -254,6 +360,10 @@ class DPOCollator:
 
 
 class DPODataSFTCollator:
+    """
+    Note that when you are using the DPO pair dataset, you may overlook the oversampling of chosen samples.
+    """
+
     def __init__(self, tokenizer: PreTrainedTokenizer, max_seq_length: int):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
