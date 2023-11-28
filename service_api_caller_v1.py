@@ -25,7 +25,6 @@ import sys
 import os
 
 import hydra
-import torch
 from torch.utils.data import DataLoader
 from omegaconf import DictConfig
 from tqdm import tqdm
@@ -34,8 +33,6 @@ from general_util.logger import setting_logger
 from general_util.training_utils import set_seed, load_and_cache_examples
 
 logger: logging.Logger
-
-torch.backends.cuda.matmul.allow_tf32 = True
 
 
 def default_collate_fn(batch):

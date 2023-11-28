@@ -2,6 +2,7 @@ _target_: data.logiqav2.ComposePromptGenerator
 read_func:
   _target_: data.logiqav2.LogicQAReader
   flat_options: True
+  option_order: "ABCD"
 template_id: 8
 instruction:
   _target_: data.prompts.logiqav2.react.prompts.get_prompt

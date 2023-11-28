@@ -91,7 +91,15 @@ class OpenAICallBack:
         if os.path.exists(logging_file):
             with open(logging_file, "r") as f:
                 for line in f.readlines():
-                    self.predictions.append(json.loads(line))
+                    # self.predictions.append(json.loads(line))
+                    item = json.loads(line)
+                    if isinstance(item["response"], str):
+                        if item["response"].strip() == "":
+                            continue
+                    elif isinstance(item["response"], list):
+                        if any([tmp.strip() == "" for tmp in item["response"]]):
+                            continue
+                    self.predictions.append(item)
             self.fw = open(logging_file, "a")
         else:
             self.fw = open(logging_file, "w")
@@ -162,4 +170,7 @@ class OpenAICallBack:
 
         np_output_file = self.output_file.replace(".json", ".npy")
         np.save(np_output_file, np.array(outputs))
+
+        metrics = {"acc": cnt / len(self.predictions)}
+        json.dump(metrics, open(os.path.join(save_dir, "metrics.json"), "w"), indent=2)
         return {"acc": cnt / len(self.predictions)}, []

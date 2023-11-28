@@ -1,5 +1,6 @@
 import copy
 import json
+import os.path
 from typing import List, Dict, Tuple, Union, Any, Callable
 
 from omegaconf.listconfig import ListConfig
@@ -38,8 +39,9 @@ def _format_option_list(option_list: List[str], _rank2option: List[str]) -> str:
 class LogicQAReader:
     rank2option = ['A', 'B', 'C', 'D']
 
-    def __init__(self, flat_options: bool = False):
+    def __init__(self, flat_options: bool = False, option_order: str = "ABCD"):
         self.flat_options = flat_options
+        self.option_order = option_order
 
     def __call__(self, file):
         all_context = []
@@ -51,10 +53,19 @@ class LogicQAReader:
             lines = f.readlines()
             for line in lines:
                 item = json.loads(line)
-                all_label.append(item["answer"])
                 all_context.append(item["text"])
                 all_question.append(item["question"])
-                all_option_list.append(item["options"])
+
+                options = []
+                ordered_label = -1
+                for i, x in enumerate(self.option_order):
+                    idx = ord(x) - ord('A')
+                    options.append(item["options"][idx])
+
+                    if ord(x) - ord('A') == item["answer"]:
+                        ordered_label = i
+                all_option_list.append(options)
+                all_label.append(ordered_label)
 
         return [
             {
@@ -88,7 +99,10 @@ class SubResponseMergeReader(LogicQAReader):
             original_item = id2original_data[idx]
             for state_id, state in enumerate(item["inter_states"]):
                 new_item = copy.deepcopy(original_item)
-                new_item["response"] = state
+                if isinstance(state, str):
+                    new_item["response"] = state
+                else:
+                    new_item["response"] = state["state"]
                 new_item["id"] = f"{idx}_{state_id}"
                 outputs.append(new_item)
         return outputs
@@ -108,17 +122,26 @@ class ComposePromptGenerator(Dataset):
         self.input_data: List[Dict[str, Any]] = read_func(file_path)
 
         flushed_data = {}
-        if flush_file is not None:
+        if flush_file is not None and os.path.exists(flush_file):
             tmp = open(flush_file, "r").readlines()
             for line in tmp:
                 item = json.loads(line)
-                flushed_data[item["index"]] = item
+                if "response" in item:
+                    if isinstance(item["response"], str):
+                        if item["response"].strip() == "":
+                            continue
+                    elif isinstance(item["response"], list):
+                        if any([tmp.strip() == "" for tmp in item["response"]]):
+                            continue
+                flushed_data[item["id"]] = item
+            logger.info(f"Loaded flushed data: {len(flushed_data)}")
 
         self.inputs = []
         self.indices = []
         self.labels = []
         for i in range(len(self.input_data)):
-            if i in flushed_data:
+            idx = self.input_data[i]["id"] if "id" in self.input_data[i] else i
+            if idx in flushed_data:
                 continue
 
             _input = ""
@@ -131,10 +154,11 @@ class ComposePromptGenerator(Dataset):
             _input += templates[template_id].format(*params)
 
             self.inputs.append(_input)
-            if "id" in self.input_data[i]:
-                self.indices.append(self.input_data[i]["id"])
-            else:
-                self.indices.append(i)
+            # if "id" in self.input_data[i]:
+            #     self.indices.append(self.input_data[i]["id"])
+            # else:
+            #     self.indices.append(i)
+            self.indices.append(idx)
             self.labels.append(self.input_data[i]["label"])
 
         self.tokenizer = tokenizer

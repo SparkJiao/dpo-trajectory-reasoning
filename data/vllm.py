@@ -59,41 +59,56 @@ class VLLMRequestGenerator:
         self.stop = stop if isinstance(stop, list) else list(stop)
         self.temperature = temperature
         self.kwargs = kwargs
+        self.max_retry = 10
 
     def __call__(self, prompt: str) -> str:
-        if "completions" not in self.api_url:
-            response, content = get_response(post_http_request(prompt,
-                                                               self.api_url,
-                                                               n=self.n,
-                                                               max_tokens=self.max_tokens,
-                                                               temperature=self.temperature,
-                                                               use_beam_search=self.use_beam_search,
-                                                               stream=self.stream,
-                                                               stop=self.stop,
-                                                               **self.kwargs))[0]
-            response = response.replace(prompt, "")
-        else:
-            response = post_http_request(prompt,
-                                         self.api_url,
-                                         n=self.n,
-                                         max_tokens=self.max_tokens,
-                                         temperature=self.temperature,
-                                         use_beam_search=self.use_beam_search,
-                                         stream=self.stream,
-                                         stop=self.stop,
-                                         **self.kwargs)
-            # print(json.loads(response.content))
-            # content = json.loads(response.content)
-            if response.status_code != 200:
-                logger.warning(response.content)
-                response = ""
+        re_try = 0
+        max_tokens = self.max_tokens
+        while True:
+            if "completions" not in self.api_url:
+                response, content = get_response(post_http_request(prompt,
+                                                                   self.api_url,
+                                                                   n=self.n,
+                                                                   max_tokens=max_tokens,
+                                                                   temperature=self.temperature,
+                                                                   use_beam_search=self.use_beam_search,
+                                                                   stream=self.stream,
+                                                                   stop=self.stop,
+                                                                   **self.kwargs))[0]
+                response = response.replace(prompt, "")
+                # TODO: Add error processing here (need to remove `get_response` method)
             else:
-                outputs = []
-                for item in json.loads(response.content)["choices"]:
-                    outputs.append(item["text"].replace(prompt, ""))
-                if len(outputs) == 1:
-                    response = outputs[0]
+                response = post_http_request(prompt,
+                                             self.api_url,
+                                             n=self.n,
+                                             max_tokens=max_tokens,
+                                             temperature=self.temperature,
+                                             use_beam_search=self.use_beam_search,
+                                             stream=self.stream,
+                                             stop=self.stop,
+                                             **self.kwargs)
+
+                if response.status_code != 200:
+                    logger.warning(response.content)
+                    # response = json.loads(response.content)
+                    response = response.content.decode('utf-8')
+                    if "maximum context length" in response:
+                        max_tokens -= 100
+                        re_try += 1
+                        logger.warning("max_tokens reduced to: {}".format(max_tokens))
+
+                    response = ""
                 else:
-                    response = outputs
+                    re_try = 0
+                    outputs = []
+                    for item in json.loads(response.content)["choices"]:
+                        outputs.append(item["text"].replace(prompt, ""))
+                    if len(outputs) == 1:
+                        response = outputs[0]
+                    else:
+                        response = outputs
+
+            if re_try == 0 or re_try > self.max_retry:
+                break
 
         return response

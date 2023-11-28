@@ -1,0 +1,43 @@
+defaults:
+  - hydra: default
+  - reader/logiqav2@read_tensor: react_service_0shot_v1_0
+  - post_process: openai_react
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+
+step: 800
+port: 6000
+#exp_dir: experiments/llama2.7b.chat.logiqav2.dpo.A40.w4.v4.1
+exp_dir: experiments/llama2.7b.chat.logiqav2.dpo.A100.w4.v4.1
+#model: llama-2-7b-dpo-4.1-cp800
+model: llama-2-7b-dpo-v4.0-cp800
+read_tensor:
+  read_func:
+#    option_order: "BCAD"  # o1
+    option_order: "DCBA"  # o2
+
+output_file: ${exp_dir}/checkpoint-${step}/logiqav2-test.full.qa.react.v1.0.0shot.o2.json
+flush_file: ${output_file}l
+
+# Dataloader
+num_workers: 48
+prefetch_factor: 2
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

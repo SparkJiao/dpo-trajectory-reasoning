@@ -223,17 +223,18 @@ class ReActFormat:
         return True
 
 
-class DPOMergeBalanceDataset(Dataset):
+class DPOMergeBalanceDataset(ComposeDatasetMixin):
     def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
                  original_data_file: str, original_reader: Callable, template: str,
+                 reader: Optional[Callable] = DPOPairReader(),
                  instruction: str = "", few_shot_prompts: str = "",
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  balance_ratio: float = 1.0,
                  format_filter: Optional[Callable] = None,
                  ):
+        super().__init__(template, instruction, few_shot_prompts, compose_keys)
         self.tokenizer = tokenizer
 
-        reader = DPOPairReader()
         dpo_data = reader(file_path)
         self.id2dpo_item = collections.defaultdict(list)
         for item in dpo_data:
@@ -285,17 +286,6 @@ class DPOMergeBalanceDataset(Dataset):
     def __len__(self):
         return len(self.full_data) + int(len(self.part_data) * self.balance_ratio)
 
-    def compose_input(self, item, response: str):
-        _input = ""
-        if self.instruction:
-            _input += self.instruction + "\n\n"
-        if self.few_shot_prompts:
-            _input += self.few_shot_prompts + "\n\n"
-        params = [item[k] for k in self.compose_keys]
-        prompt = _input + self.template.format(*params)
-        output = prompt + response
-        return prompt, output
-
     def __getitem__(self, index):
         # item = self.data[index]
         if index < len(self.full_data):
@@ -320,6 +310,41 @@ class DPOMergeBalanceDataset(Dataset):
             "chosen": chosen_input,
             "reject": reject_input,
             "index": item["index"],
+        }
+
+
+class DPOMergeParallelDataset(DPOMergeBalanceDataset):
+    def __len__(self):
+        assert self.balance_ratio == 1
+        return len(self.full_data)
+
+    def process_item(self, item):
+        chosen = item["chosen"]
+        reject = item["reject"]
+        if isinstance(chosen, list):
+            chosen = random.choice(chosen)
+        if isinstance(reject, list):
+            reject = random.choice(reject)
+
+        chosen_prompt, chosen_input = self.compose_input(item, chosen)
+        reject_prompt, reject_input = self.compose_input(item, reject)
+        assert chosen_prompt == reject_prompt, (chosen_prompt, reject_prompt)
+
+        return {
+            "prompt": chosen_prompt,
+            "chosen": chosen_input,
+            "reject": reject_input,
+            "index": item["index"],
+        }
+
+    def __getitem__(self, index):
+        full_item = self.full_data[index]
+        part_item = random.choice(self.part_data)
+        full_item = self.process_item(full_item)
+        part_item = self.process_item(part_item)
+        return {
+            "full_input": full_item,
+            "part_input": part_item,
         }
 
 
@@ -357,6 +382,16 @@ class DPOCollator:
             "reject": reject,
         }
         return encoded_inputs
+
+
+class DPOParallelCollator(DPOCollator):
+    def __call__(self, batch):
+        full_batch = [item["full_input"] for item in batch]
+        part_batch = [item["part_input"] for item in batch]
+        combined_batch = full_batch + part_batch
+        inputs = super().__call__(combined_batch)
+
+        return inputs
 
 
 class DPODataSFTCollator:
