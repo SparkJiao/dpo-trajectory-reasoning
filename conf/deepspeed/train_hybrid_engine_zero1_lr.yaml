@@ -1,9 +1,8 @@
 train_micro_batch_size_per_gpu:
 gradient_accumulation_steps:
 scheduler:
-  type: WarmupDecayLR
+  type: WarmupLR
   params:
-    total_num_steps:
     warmup_max_lr: ${learning_rate}
     warmup_num_steps:
     warmup_type: linear

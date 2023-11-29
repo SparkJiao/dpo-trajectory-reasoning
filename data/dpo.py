@@ -314,6 +314,10 @@ class DPOMergeBalanceDataset(ComposeDatasetMixin):
 
 
 class DPOMergeParallelDataset(DPOMergeBalanceDataset):
+    """
+    This dataset is to ensure that the ration between full examples and partial examples is exactly 1:1.
+    """
+
     def __len__(self):
         assert self.balance_ratio == 1
         return len(self.full_data)
@@ -431,3 +435,82 @@ class DPODataSFTCollator:
             "response": chosen,
         }
         return encoded_inputs
+
+
+class PairwiseRewardDataset(ComposeDatasetMixin):
+    """
+    This dataset reuse the logic from `DPOMergeDataset` and `DPOCollator`. The only difference is that we add `eos` token to all examples
+    to ensure that the rewarding process is consistent across all examples.
+    """
+
+    def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
+                 original_data_file: str, original_reader: Callable, template: str,
+                 reader=DPOPairReader(),
+                 instruction: str = "", few_shot_prompts: str = "",
+                 compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
+                 format_filter: Optional[Callable] = None):
+        super().__init__(template, instruction, few_shot_prompts, compose_keys)
+
+        self.tokenizer = tokenizer
+
+        dpo_data = reader(file_path)
+        self.id2dpo_item = collections.defaultdict(list)
+        for item in dpo_data:
+            self.id2dpo_item[item["id"]].append(item)
+
+        original_data = original_reader(original_data_file)
+        data = []
+        abandoned = []
+        for i, item in enumerate(original_data):
+            if "index" in item:
+                item_id = item["index"]
+            else:
+                item_id = i
+            if item_id in self.id2dpo_item:
+                for pair_sample in self.id2dpo_item[item_id]:
+                    if not format_filter(pair_sample):
+                        abandoned.append(pair_sample)
+                        continue
+
+                    chosen = pair_sample["chosen"]
+                    reject = pair_sample["reject"]
+                    chosen = chosen + tokenizer.eos_token
+                    reject = reject + tokenizer.eos_token
+
+                    item["chosen"] = chosen
+                    item["reject"] = reject
+                    item["index"] = item_id
+                    data.append(item)
+
+        logger.info(f"DPOMergeReader: {len(data)} / {len(original_data)}")
+        self.data: List[Dict[str, Any]] = data
+        self.template = template
+        self.instruction = instruction
+        self.few_shot_prompts = few_shot_prompts
+        self.compose_keys = compose_keys
+
+        if format_filter:
+            logger.info(f"Abandoned some of non-format examples:\n{len(abandoned[:10])}")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        item = self.data[index]
+        chosen = item["chosen"]
+        reject = item["reject"]
+        if isinstance(chosen, list):
+            chosen = random.choice(chosen)
+        if isinstance(reject, list):
+            reject = random.choice(reject)
+
+        chosen_prompt, chosen_input = self.compose_input(item, chosen)
+        reject_prompt, reject_input = self.compose_input(item, reject)
+        assert chosen_prompt == reject_prompt, (chosen_prompt, reject_prompt)
+
+        return {
+            "prompt": chosen_prompt,
+            "chosen": chosen_input,
+            "reject": reject_input,
+            "index": item["index"],
+        }

@@ -18,7 +18,10 @@ from transformers.modeling_outputs import ModelOutput
 from transformers.models.llama.modeling_llama import (
     LlamaForCausalLM as HfLlamaForCausalLM,
     PreTrainedModel,
-    CausalLMOutputWithPast
+    CausalLMOutputWithPast,
+    LlamaModel,
+    LlamaPreTrainedModel,
+    LlamaConfig,
 )
 
 from general_util.logger import get_child_logger
@@ -34,8 +37,8 @@ class DPOModelOutput(ModelOutput):
     loss: torch.FloatTensor = None
     chosen_reward: torch.FloatTensor = None
     rejected_reward: torch.FloatTensor = None
-    policy_chosen_logits: torch.FloatTensor = None
-    policy_rejected_logits: torch.FloatTensor = None
+    policy_chosen_logits: Optional[torch.FloatTensor] = None
+    policy_rejected_logits: Optional[torch.FloatTensor] = None
 
 
 def return_single_device_map():
@@ -143,10 +146,27 @@ def llama_dpo_batch_forward(model: HfLlamaForCausalLM, input_ids: torch.LongTens
     return logits, (per_token_logprobs * loss_mask).sum(-1), loss_mask
 
 
+def llama_last_token_cls_batch_forward(model: LlamaModel, linear: nn.Linear,
+                                       input_ids: torch.LongTensor, attention_mask: torch.Tensor,
+                                       pad_token_id: int, ):
+    transformer_outputs = model(
+        input_ids,
+        attention_mask=attention_mask,
+    )
+    hidden_states = transformer_outputs[0]
+
+    batch_size = input_ids.shape[0]
+    sequence_lengths = (torch.eq(input_ids, pad_token_id).long().argmax(-1) - 1).to(device=hidden_states.device)
+    last_token_states = hidden_states[torch.arange(batch_size, device=hidden_states.device), sequence_lengths]
+    rewards = linear(last_token_states)
+    return rewards, sequence_lengths
+
+
 class LlamaForCausalLMDPO(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
-    def __init__(self, config, beta: float = 0.1):
+    def __init__(self, config, beta: float = 0.1, label_smoothing: float = 0.0):
         super().__init__(config)
         self.beta = beta
+        self.label_smoothing = label_smoothing
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -183,7 +203,10 @@ class LlamaForCausalLMDPO(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
 
         logits = pi_logratios - ref_logratios
 
-        losses = -nn.functional.logsigmoid(self.beta * logits)
+        log_sigmoid = nn.LogSigmoid()
+
+        # losses = -nn.functional.logsigmoid(self.beta * logits)
+        losses = -log_sigmoid(self.beta * logits) * (1 - self.label_smoothing) - log_sigmoid(-self.beta * logits) * self.label_smoothing
         chosen_rewards = self.beta * (policy_chosen_logps - reference_chosen_logps).detach()
         rejected_rewards = self.beta * (policy_rejected_logps - reference_rejected_logps).detach()
 
@@ -226,6 +249,49 @@ class LlamaForCausalLMDPO(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
             rejected_reward=rejected_rewards.mean(),
             policy_chosen_logits=policy_chosen_logits,
             policy_rejected_logits=policy_reject_logits,
+        )
+
+
+class LlamaRewardModel(PreTrainedModelPeftMixin, LlamaPreTrainedModel):
+    def __init__(self, config: LlamaConfig):
+        super().__init__(config)
+        self.model = LlamaModel(config)
+        self.score = nn.Linear(config.hidden_size, 1, bias=False)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    @torch.cuda.amp.autocast(enabled=True, dtype=torch.float32)
+    def pair_wise_loss(self,
+                       chosen_rewards: torch.FloatTensor,
+                       rejected_rewards: torch.FloatTensor, ):
+        reward_loss = -torch.log(torch.sigmoid(chosen_rewards - rejected_rewards)).mean()
+        return reward_loss
+
+    def forward(
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            labels: Optional[torch.LongTensor] = None,
+            use_cache: Optional[bool] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
+            **kwargs,
+    ) -> Union[Tuple, DPOModelOutput]:
+        half = input_ids.size(0) // 2
+
+        rewards, sequence_lengths = llama_last_token_cls_batch_forward(self.model, self.score, input_ids, attention_mask, self.config.pad_token_id)
+        chosen_rewards, rejected_rewards = rewards[:half], rewards[half:]
+
+        loss = self.pair_wise_loss(chosen_rewards, rejected_rewards)
+
+        return DPOModelOutput(
+            loss=loss,
+            chosen_reward=chosen_rewards.mean(),
+            rejected_reward=rejected_rewards.mean(),
+            policy_chosen_logits=None,
+            policy_rejected_logits=None,
         )
 
 
