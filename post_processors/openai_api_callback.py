@@ -172,5 +172,5 @@ class OpenAICallBack:
         np.save(np_output_file, np.array(outputs))
 
         metrics = {"acc": cnt / len(self.predictions)}
-        json.dump(metrics, open(os.path.join(save_dir, "metrics.json"), "w"), indent=2)
+        json.dump(metrics, open(self.output_file.replace(".json", ".metrics.json"), "w"), indent=2)
         return {"acc": cnt / len(self.predictions)}, []

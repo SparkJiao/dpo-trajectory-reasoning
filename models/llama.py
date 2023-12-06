@@ -39,6 +39,8 @@ class DPOModelOutput(ModelOutput):
     rejected_reward: torch.FloatTensor = None
     policy_chosen_logits: Optional[torch.FloatTensor] = None
     policy_rejected_logits: Optional[torch.FloatTensor] = None
+    batch_chosen_reward: Optional[torch.FloatTensor] = None
+    batch_rejected_reward: Optional[torch.FloatTensor] = None
 
 
 def return_single_device_map():
@@ -292,6 +294,26 @@ class LlamaRewardModel(PreTrainedModelPeftMixin, LlamaPreTrainedModel):
             rejected_reward=rejected_rewards.mean(),
             policy_chosen_logits=None,
             policy_rejected_logits=None,
+            batch_chosen_reward=chosen_rewards,
+            batch_rejected_reward=rejected_rewards,
+        )
+
+
+class LlamaRewardModelForEval(LlamaRewardModel):
+    def forward(
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            labels: Optional[torch.LongTensor] = None,
+            use_cache: Optional[bool] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
+            **kwargs,
+    ) -> Union[Tuple, DPOModelOutput]:
+        rewards, sequence_lengths = llama_last_token_cls_batch_forward(self.model, self.score, input_ids, attention_mask, self.config.pad_token_id)
+        return DPOModelOutput(
+            batch_chosen_reward=rewards,
         )
 
 

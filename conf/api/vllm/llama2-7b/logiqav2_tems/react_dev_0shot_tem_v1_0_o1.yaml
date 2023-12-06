@@ -10,19 +10,18 @@ hydra:
 
 train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
 dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
-test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 
 step: 1600
 port: 6000
-#exp_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.0/
 exp_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.1
 model: llama-2-7b-70bdistil-step-dpo-v1.1-cp1600
-#read_tensor:
-#  read_func:
-#    option_order: "BCAD"  # o1
+read_tensor:
+  read_func:
+    option_order: "BCAD"  # o1
 #    option_order: "DCBA"  # o2
 
-output_file: ${exp_dir}/checkpoint-${step}/logiqav2-test.full.qa.react.v1.0.0shot.json
+output_file: ${exp_dir}/checkpoint-${step}/logiqav2-dev.full.qa.react.v1.0.0shot.o1.json
 flush_file: ${output_file}l
 
 # Dataloader

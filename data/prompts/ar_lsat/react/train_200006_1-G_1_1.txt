@@ -1,0 +1,36 @@
+Context:
+Four boys—Fred, Juan, Marc, and Paul—and three girls—Nita, Rachel, and Trisha—will be assigned to a row of five adjacent lockers, numbered consecutively 1 through 5, arranged along a straight wall. The following conditions govern the assignment of lockers to the seven children: Each locker must be assigned to either one or two children, and each child must be assigned to exactly one locker. Each shared locker must be assigned to one girl and one boy. Juan must share a locker, but Rachel cannot share a locker. Nita's locker cannot be adjacent to Trisha's locker. Fred must be assigned to locker 3.
+
+Question:
+Which one of the following is a complete and accurate list of the children who must be among those assigned to shared lockers?
+
+Options:
+A. Fred, Juan
+B. Juan, Paul
+C. Juan, Marc, Paul
+D. Juan, Marc, Trisha
+E. Juan, Nita, Trisha
+
+Thought 3: We cannot derive more facts. We should make assumptions to discuss different scenarios: (1) Juan share a locker with Nita; (2) Juan share a locker with Trisha.
+Action 3: Take the assumption (1) Juan share a locker with Nita;
+State 3: Current assignment state is (1) Fred is assigned to locker 3; (2) Juan and Nita shares a locker. (3) Rachel is assigned to a locker without sharing.
+Thought 4: How many girls and boys left for decision?
+Action 4: Boys left are Marc and Paul. Girls left is Trisha.
+Thought 5: Think about the status of lockers.
+Action 5: Two lockers are not available (One shared by Juan and Nita, and one is assigned to Rachel without sharing). Locker 3 is assigned to Fred and can be assigned with another girl. The other two lockers are empty.
+Thought 6: We have two boys and one girl.  Considering each shared locker should be assigned with one boy and one girl. We can discuss the different cases whether Trisha will share or not.
+Action 6: Trisha needs to share a locker.
+State 6: Trisha can share a locker with one of Marc, Paul, and Fred, then the left two boys are assigned with their own locker.
+Thought 7: All children are assigned and no locker left. Who mush share a locker in this case?
+Action 7: Juan, Nita, Trisha.
+State 7: Juan, Nita, Trisha must share a locker.
+Action 8: Trisha cannot share a locker.
+State 8: Trisha is assigned to a unique locker. Then the left two boys Marc and Paul need to be assigned to one empty room and another room already assigned to Fred. This is invalid since each shared room should contain one boy and one girl.
+Action 9: Summarize current conclusion under the assumption (1) Juan share a locker with Nita;
+State 9: The children share lockers are Juan, Nita, and Trisha.
+Action 10: Take the assumption (2) Juan share a locker with Trisha.
+Thought 11: There is no difference about assignment between Trisha and Nita.
+Action 11: Following the previous attempts, we can got similar conclusion that Juan, Nita and Trisha share lockers.
+Action 12: Merge the conclusions of two assumptions.
+State 12: The children who must share lockers are Juan, Nita, and Trisha.
+Action 13: Final[The answer is E.]

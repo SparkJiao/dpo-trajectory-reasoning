@@ -307,42 +307,42 @@ def main(cfg: DictConfig):
     # Set seed
     set_seed(cfg)
 
-    use_barrier = not os.path.exists(cfg.model_name_or_path)
-    # Load pre-trained model and tokenizer
-    if use_barrier and cfg.local_rank not in [-1, 0]:
-        dist.barrier()  # Make sure only the first process in distributed training will download model & vocab
-
-    if cfg.pretrain:
-        pretrain_state_dict = torch.load(cfg.pretrain, map_location='cpu')
-    else:
-        pretrain_state_dict = None
-
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model_name_or_path)
-
-    from general_util.tokenization_utils import expand_special_tokenizer
-
-    expand_special_tokenizer(tokenizer)
-
-    try:
-        model = hydra.utils.call(cfg.model, cfg.model_name_or_path, state_dict=pretrain_state_dict)
-    except Exception as e:
-        logger.warning(e)
-        model = hydra.utils.call(cfg.model)
-
-    if use_barrier and cfg.local_rank == 0:
-        dist.barrier()  # Make sure only the first process in distributed training will download model & vocab
-
-    if dist.is_initialized():
-        dist.barrier()
-
-    # logger.info("Training/evaluation parameters %s", OmegaConf.to_yaml(cfg))
-    if cfg.local_rank in [-1, 0] and cfg.do_train:
-        if not os.path.exists(cfg.output_dir):
-            os.makedirs(cfg.output_dir)
-        OmegaConf.save(cfg, os.path.join(cfg.output_dir, "training_config.yaml"))
-
     # Training
     if cfg.do_train:
+        use_barrier = not os.path.exists(cfg.model_name_or_path)
+        # Load pre-trained model and tokenizer
+        if use_barrier and cfg.local_rank not in [-1, 0]:
+            dist.barrier()  # Make sure only the first process in distributed training will download model & vocab
+
+        if cfg.pretrain:
+            pretrain_state_dict = torch.load(cfg.pretrain, map_location='cpu')
+        else:
+            pretrain_state_dict = None
+
+        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name_or_path)
+
+        from general_util.tokenization_utils import expand_special_tokenizer
+
+        expand_special_tokenizer(tokenizer)
+
+        try:
+            model = hydra.utils.call(cfg.model, cfg.model_name_or_path, state_dict=pretrain_state_dict)
+        except Exception as e:
+            logger.warning(e)
+            model = hydra.utils.call(cfg.model)
+
+        if use_barrier and cfg.local_rank == 0:
+            dist.barrier()  # Make sure only the first process in distributed training will download model & vocab
+
+        if dist.is_initialized():
+            dist.barrier()
+
+        # logger.info("Training/evaluation parameters %s", OmegaConf.to_yaml(cfg))
+        if cfg.local_rank in [-1, 0] and cfg.do_train:
+            if not os.path.exists(cfg.output_dir):
+                os.makedirs(cfg.output_dir)
+            OmegaConf.save(cfg, os.path.join(cfg.output_dir, "training_config.yaml"))
+
         continue_from_global_step = 0  # If set to 0, start training from the beginning
         if os.path.exists(cfg.output_dir) and getattr(cfg, "resume", None):
             checkpoint = cfg.resume

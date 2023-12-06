@@ -1,0 +1,51 @@
+defaults:
+  - hydra: default
+  - reader/logiqav2@read_tensor: react_service_1shot_v1_0
+  - post_process: openai_react
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/AR-LSAT/data/AR_TrainingData.json
+dev_file: ../research.data/AR-LSAT/data/AR_DevelopmentData.json
+test_file: ../research.data/AR-LSAT/data/AR_TestData.json
+
+port: 8000
+model: llama-2-70b-chat
+
+output_file: ../pretrained-models/Llama-2-70b-chat-hf/ar-lsat.react.dev.1shot.v1.1.json
+flush_file: ${output_file}l
+
+# Data loading
+read_tensor:
+  read_func:
+    _target_: data.ar_lsat.ARLSATReader
+    flat_options: True
+  few_shot_prompt:
+    _target_: data.logiqav2.read_single_file
+    file_path: data/prompts/ar_lsat/react/train_200006_1-G_1_1.txt
+
+# Dataloader
+num_workers: 32
+prefetch_factor: 2
+
+output_dir:
+
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

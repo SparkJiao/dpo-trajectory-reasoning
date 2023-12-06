@@ -21,11 +21,11 @@
 
 import inspect
 import logging
-import sys
 import os
+import sys
 
 import hydra
-from torch.utils.data import DataLoader
+import torch
 from omegaconf import DictConfig
 from tqdm import tqdm
 
@@ -35,35 +35,30 @@ from general_util.training_utils import set_seed, load_and_cache_examples
 logger: logging.Logger
 
 
-def default_collate_fn(batch):
-    return batch[0]
-
-
-def run_inference(cfg: DictConfig, dataset):
+def run_inference(cfg: DictConfig, model: torch.nn.Module, dataset):
     post_processor = hydra.utils.instantiate(cfg.post_process)
 
     # Eval!
     logger.info("***** Running inference through OpenAI API *****")
     logger.info("  Num examples = %d", len(dataset))
-    logger.info("  Batch size = %d", 1)
+    logger.info("  Batch size = %d", cfg.per_gpu_eval_batch_size)
 
-    eval_dataloader = DataLoader(dataset,
-                                 # sampler=eval_sampler,
-                                 batch_size=1,
-                                 collate_fn=default_collate_fn,
-                                 num_workers=cfg.num_workers,
-                                 pin_memory=True,
-                                 prefetch_factor=cfg.prefetch_factor)
-
-    for batch in tqdm(eval_dataloader, desc="Evaluating", disable=cfg.local_rank not in [-1, 0], dynamic_ncols=True):
+    for i in tqdm(range(len(dataset)), desc="Evaluating", disable=cfg.local_rank not in [-1, 0], dynamic_ncols=True):
+        batch = dataset[i]
         if "meta_data" in batch:
             meta_data = batch.pop("meta_data")
         else:
             meta_data = []
 
-        # outputs = model(**batch)
-        outputs = batch
-        post_processor(meta_data, outputs)
+        outputs = model(**batch)
+
+        if any(hasattr(post_processor, tmp) for tmp in ["gather", "gather_object"]):
+            kwargs = {
+                "ddp": cfg.ddp_eval and cfg.local_rank != -1
+            }
+        else:
+            kwargs = {}
+        post_processor(meta_data, outputs, **kwargs)
 
     sig = inspect.signature(post_processor.get_results)
     post_kwargs = {}
@@ -86,13 +81,12 @@ def main(cfg: DictConfig):
     # Set seed
     set_seed(cfg)
 
-    # model = hydra.utils.call(cfg.model)
+    model = hydra.utils.call(cfg.model)
 
-    logger.info(cfg.test_file)
     dataset = load_and_cache_examples(cfg, None, _split="test")
 
     # Test
-    results = run_inference(cfg, dataset)
+    results = run_inference(cfg, model, dataset)
 
     return results
 

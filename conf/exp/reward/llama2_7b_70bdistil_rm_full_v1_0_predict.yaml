@@ -16,11 +16,11 @@ diff: 2.6
 
 data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/
 full_train_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.dpo_pair.sub_train.json
-full_dev_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.dpo_pair.sub_dev.json
+sub_train_file: ${data_dir}/react-inter-states/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.sample3.diff${diff}.decay${decay}.json
 
-train_file: ${data_dir}/react-inter-states/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.sample3.diff${diff}.decay${decay}.json
-dev_file: ${full_dev_file}
-test_file: ${train_file}
+train_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.dpo_pair.sub_train.sub_dev.json  # 25600 = 64 * 400
+dev_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.dpo_pair.sub_dev.json
+test_file: ${full_train_file}
 
 torch_dtype:
   _target_: general_util.training_utils.return_torch_dtype
@@ -35,7 +35,7 @@ device_map:
   _target_: models.llama.return_single_device_map
 
 model:
-  _target_: models.llama.LlamaRewardModel.from_pretrained
+  _target_: models.llama.LlamaRewardModelForEval.from_pretrained
   gradient_checkpointing: True
   pad_token_id: 0
   use_flash_attention_2: True
@@ -44,25 +44,7 @@ model:
 
 
 # Data loading
-read_tensor_train:
-  _target_: data.dpo.PairwiseRewardDataset
-  original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
-  original_reader:
-    _target_: data.logiqav2.LogicQAReader
-    flat_options: True
-  instruction:
-    _target_: data.prompts.logiqav2.react.prompts.get_prompt
-    prompt_name: react_v2
-  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n"
-  reader:
-    _target_: data.dpo.DPOReaderAux
-    extra_file: ${full_train_file}
-  compose_keys: [ "context", "question", "option_list" ]
-  format_filter:
-    _target_: data.dpo.ReActFormat
-
-
-read_tensor_dev:
+read_tensor:
   _target_: data.dpo.PairwiseRewardDataset
   original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
   original_reader:
@@ -75,10 +57,9 @@ read_tensor_dev:
   compose_keys: [ "context", "question", "option_list" ]
   format_filter:
     _target_: data.dpo.ReActFormat
-
 
 read_tensor_test:
-  _target_: data.dpo.PairwiseRewardDataset
+  _target_: data.dpo.SingleRecordRewardDataset
   original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
   original_reader:
     _target_: data.logiqav2.LogicQAReader
@@ -89,10 +70,9 @@ read_tensor_test:
   template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n"
   reader:
     _target_: data.dpo.DPOReaderAux
-    extra_file: ${full_train_file}
+    extra_file: ${sub_train_file}
   compose_keys: [ "context", "question", "option_list" ]
   format_filter:
-    _target_: data.dpo.ReActFormat
   re_index: True   # ========================================================= This will fix the bug in aligning the predictions and the original data file.
 
 
@@ -101,8 +81,12 @@ dist_load_data_barrier: False
 extended_vocab:
 
 # Data collator
+#collator:
+#  _target_: data.dpo.DPOCollator
+#  tokenizer: ${tokenizer_init}
+#  max_seq_length: 2048
 collator:
-  _target_: data.dpo.DPOCollator
+  _target_: data.dpo.SingleRecordRewardCollator
   tokenizer: ${tokenizer_init}
   max_seq_length: 2048
 
@@ -116,7 +100,7 @@ pretrain:
 resume:
 
 
-exp_name: llama2.7b.chat.logiqav2.70b-distil.rm.H100.w4.v1.0
+exp_name: llama2.7b.chat.logiqav2.70b-distil.rm.full.H100.w4.v1.0
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -130,7 +114,7 @@ eval_sub_path: checkpoint-*
 
 # Training hyper-parameters
 per_gpu_train_batch_size: 4
-per_gpu_eval_batch_size: 4
+per_gpu_eval_batch_size: 32
 #learning_rate: 1e-4
 #learning_rate: 5e-6
 learning_rate: 1e-6
@@ -142,7 +126,7 @@ adam_betas: "(0.9, 0.98)"
 #max_grad_norm: 0.0
 total_dataset_len: -1
 max_grad_norm: 1.0
-num_train_epochs: 1
+num_train_epochs: 5
 max_steps: 0
 warmup_proportion: 0
 warmup_steps: 200
@@ -174,7 +158,7 @@ prediction_cfg:
 eval_forward_fn:
   _target_: general_util.evaluator.DefaultForwardFn
 post_process:
-  _target_: post_processors.dpo.DPORewardPostProcessor
+  _target_: post_processors.dpo.DPORewardSinglePostProcessor
 predict_dir: ${output_dir}/train_decay${decay}.diff${diff}.rewards.v1.0.fix
 
 ds_cfg:
