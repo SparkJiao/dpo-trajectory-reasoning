@@ -17,6 +17,7 @@ port: 6000
 exp_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.1
 model: llama-2-7b-70bdistil-step-dpo-v1.1-cp1600
 read_tensor:
+  template_id: 6
   read_func:
 #    option_order: "BCAD"  # o1
     option_order: "DCBA"  # o2

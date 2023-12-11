@@ -104,7 +104,7 @@ pretrain:
 resume:
 
 
-exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.2
+exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.2.rerun
 exp_notes:
 output_dir: experiments/${exp_name}
 

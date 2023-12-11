@@ -27,10 +27,10 @@
 
 
 #===================================================================================================
-model_path=experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v2.3
-step=1600
+model_path=experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.A100.w4.v3.0/
+step=3200
 
 python -m vllm.entrypoints.openai.api_server --model $model_path/checkpoint-$step \
   --tokenizer $model_path/checkpoint-$step \
-  --dtype bfloat16 --served-model-name llama-2-7b-70bdistil-step-dpo-v2.3-cp$step --disable-log-requests -tp 2
+  --dtype bfloat16 --served-model-name llama-2-7b-70bdistil-step-dpo-v3.0-cp$step --disable-log-requests -tp 2
 

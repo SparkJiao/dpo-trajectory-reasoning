@@ -10,14 +10,14 @@ hydra:
   searchpath:
     - file://conf/
 
-decay: 1.0
 diff: 3.0
+step_ratio_diff: 0.4
 
 data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/
 full_train_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.dpo_pair.sub_train.json
 full_dev_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.dpo_pair.sub_dev.json
 
-train_file: ${data_dir}/react-inter-states/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.1.rs0.2.r0.3.sample3.diff${diff}.decay${decay}.json
+train_file: ${data_dir}/react-inter-states/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.3.rs0.2.r0.3.sample3.diff${diff}.step_r_diff${step_ratio_diff}.json
 dev_file: ${full_dev_file}
 test_file:
 
@@ -89,7 +89,7 @@ extended_vocab:
 collator:
   _target_: data.dpo.DPOCollator
   tokenizer: ${tokenizer_init}
-  max_seq_length: 4096
+  max_seq_length: 2048
 
 # Dataloader
 num_workers: 8
@@ -105,9 +105,8 @@ resume:
 # 2. Remove the format_filter in read_tensor_train/val/test to keep the correct data
 # 3. Add `chosen_full` and `reject_full` option to the Dataset class.
 
-#exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.NA100.40G.w4.v1.3.1  # Fix the times value of full example from 1.0 to 3.0
-#exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.A40.w8.v1.3.1  # Fix the times value of full example from 1.0 to 3.0
-exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.3.1.rerun  # Fix the times value of full example from 1.0 to 3.0
+#exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.3.fix  # Fix the times value of full example from 1.0 to 3.0
+exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.4
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -119,12 +118,12 @@ do_eval: False
 eval_sub_path: checkpoint-100
 
 # Training hyper-parameters
-per_gpu_train_batch_size: 2
+per_gpu_train_batch_size: 4
 per_gpu_eval_batch_size: 8
 #learning_rate: 1e-4
 #learning_rate: 5e-6
 learning_rate: 1e-6
-gradient_accumulation_steps: 8
+gradient_accumulation_steps: 4
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"

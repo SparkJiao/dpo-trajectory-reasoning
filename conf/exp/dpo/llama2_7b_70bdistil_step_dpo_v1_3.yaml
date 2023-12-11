@@ -105,7 +105,8 @@ resume:
 # 2. Remove the format_filter in read_tensor_train/val/test to keep the correct data
 # 3. Add `chosen_full` and `reject_full` option to the Dataset class.
 
-exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.3.fix  # Fix the times value of full example from 1.0 to 3.0
+#exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.3.fix  # Fix the times value of full example from 1.0 to 3.0
+exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.3.fix.rerun
 exp_notes:
 output_dir: experiments/${exp_name}
 
