@@ -44,11 +44,17 @@ margin=1.2
 #  --diff $diff --step_ratio_diff $step_ratio_diff \
 
 
+#python scripts/process_inter_response_v2.3_by_rewards.py \
+#  --input_file experiments/llama2.7b.chat.logiqav2.70b-distil.rm.A100.w4.v4.0/train.rewards.v1.0/test-checkpoint-600/eval_predictions_rank0.json \
+#  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.3.rs0.2.r0.3.sample3.$chosen_r.$reject_l.step_r_diff$step_ratio_diff.json" \
+#  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json"
+
+
 python scripts/process_inter_response_v2.3_by_rewards.py \
   --input_file experiments/llama2.7b.chat.logiqav2.70b-distil.rm.A100.w4.v4.0/train.rewards.v1.0/test-checkpoint-600/eval_predictions_rank0.json \
-  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.3.rs0.2.r0.3.sample3.$chosen_r.$reject_l.step_r_diff$step_ratio_diff.json" \
-  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json"
-
+  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.3.rs0.2.r0.3.sample3.$chosen_r.$reject_l.step_r_diff$step_ratio_diff.exclude_full.json" \
+  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json" \
+  --chosen_r $chosen_r --reject_l $reject_l --step_ratio_diff $step_ratio_diff --exclude_full
 
 
 # Filtering by predicted rewards

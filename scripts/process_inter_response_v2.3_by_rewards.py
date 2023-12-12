@@ -43,11 +43,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str)
     parser.add_argument("--output_file", type=str)
-    # parser.add_argument("--diff", type=float, default=2.4)
     parser.add_argument("--chosen_r", type=float, default=5.0)
     parser.add_argument("--reject_l", type=float, default=0.0)
     parser.add_argument("--inter_state_file", type=str)
     parser.add_argument("--step_ratio_diff", type=float, default=0.4)
+    parser.add_argument("--exclude_full", action="store_true", default=False)
     args = parser.parse_args()
 
     response2reward = {}
@@ -134,6 +134,8 @@ def main():
 
         for r in pos:
             for r2 in neg:
+                if args.exclude_full and r["is_full"] and r2["is_full"]:
+                    continue
                 # if r2["resp_id"] == r["resp_id"]:
                 #     continue
                 if abs(r["step_ratio"] - r2["step_ratio"]) > args.step_ratio_diff:
