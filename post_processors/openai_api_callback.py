@@ -4,6 +4,7 @@ import os
 import re
 from typing import Dict, Any, List, Tuple
 import numpy as np
+import vllm
 
 
 class MCQAAnswerClean:
@@ -116,6 +117,13 @@ class OpenAICallBack:
         # assert isinstance(label, int), type(label)
 
         response = batch_model_outputs["response"]
+        if isinstance(response, vllm.RequestOutput):
+            if response.finished:
+                response = [o.text for o in response.outputs]
+                if len(response) == 1:
+                    response = response[0]
+            else:
+                response = ""
         if isinstance(response, str):
             pred_clean = self.answer_clean(response)
         elif isinstance(response, list):

@@ -123,6 +123,7 @@ def load_and_cache_examples(cfg, tokenizer: PreTrainedTokenizer, _split="train",
     if getattr(cfg, "dist_load_data_barrier", True) and if_barrier and cfg.local_rank not in [-1, 0]:
         dist.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
 
+    logger.info("Creating features from dataset file at %s", input_file)
     sub_config = f"read_tensor_{_split}"
     if sub_config in cfg:
         dataset = initialize_dataset(cfg[sub_config], file_path=input_file, tokenizer=tokenizer)

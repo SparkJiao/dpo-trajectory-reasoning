@@ -21,7 +21,8 @@ templates = [
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n<Reasoning Start>\n",
     "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1:",
-    "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"  # Continue from the previous one for response composition.
+    "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}",  # Continue from the previous one for response composition.
+    ""
 ]
 
 
@@ -115,7 +116,9 @@ class ComposePromptGenerator(Dataset):
                  max_data_num: int = -1,
                  api_based: bool = False,
                  service_based: bool = False, service_processor: Callable = None,
-                 flush_file: str = None, ):
+                 flush_file: str = None,
+                 split_size: int = -1,
+                 split_id: int = 0,):
         self.instruction = instruction
         self.few_shot_prompt = few_shot_prompt
         self.compose_keys = compose_keys
@@ -166,6 +169,14 @@ class ComposePromptGenerator(Dataset):
         self.api_based = api_based
         self.service_based = service_based
         self.service_processor = service_processor
+
+        self.split_size = split_size
+        self.split_id = split_id
+        if self.split_size > 0:
+            assert self.split_id < self.split_size
+            self.inputs = self.inputs[self.split_id::self.split_size]
+            self.indices = self.indices[self.split_id::self.split_size]
+            self.labels = self.labels[self.split_id::self.split_size]
 
     def __len__(self):
         if self.max_data_num > 0:

@@ -8,6 +8,7 @@ REACT_PROMPT_V2 = ("Solve a question answering task by having a Thought, then Fi
 prompts = {
     "react_v1": REACT_PROMPT_V1,
     "react_v2": REACT_PROMPT_V2,
+    "react_v2_mistral": "[INST] " + REACT_PROMPT_V2 + " [/INST]",
 }
 
 

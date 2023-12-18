@@ -106,7 +106,8 @@ resume:
 # 3. Add `chosen_full` and `reject_full` option to the Dataset class.
 
 #exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.3.fix  # Fix the times value of full example from 1.0 to 3.0
-exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.4
+exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.4.s${seed}
+#exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w2.v1.4.s${seed}
 exp_notes:
 output_dir: experiments/${exp_name}
 

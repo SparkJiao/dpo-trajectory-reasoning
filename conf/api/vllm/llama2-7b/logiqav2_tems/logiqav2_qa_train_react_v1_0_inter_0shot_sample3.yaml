@@ -1,0 +1,73 @@
+defaults:
+  - hydra: default
+  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+
+save_best: True
+exp_name:
+exp_notes:
+output_dir: experiments/${exp_name}
+
+#data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states
+data_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.dpo.H100.w4.v1.0/checkpoint-1600/react-inter-states
+dataset_split_id: 0
+
+output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.0.rs0.4.r0.3.${dataset_split_id}-of-10.sample3.json
+flush_file: ${output_file}l
+
+# Data loading
+read_tensor:
+  _target_: data.logiqav2.ComposePromptGenerator
+  read_func:
+    _target_: data.logiqav2.SubResponseMergeReader
+    inter_states_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.clean_inter_ver2.0.rs0.4.r0.3.${dataset_split_id}-of-10.json
+    flat_options: True
+  template_id: 9
+  instruction:
+    _target_: data.prompts.logiqav2.react.prompts.get_prompt
+    prompt_name: react_v2
+  compose_keys: [ "context", "question", "option_list", "response" ]
+  max_data_num: -1
+  api_based: False
+  service_based: False
+  flush_file: ${flush_file}
+
+# Dataloader
+num_workers: 32
+prefetch_factor: 2
+
+post_process:
+  _target_: post_processors.openai_api_callback.OpenAICallBack
+  output_file: ${output_file}
+  answer_clean:
+    _target_: post_processors.openai_api_callback.ReActSeparatorClean
+#    prompt: "few-shot"
+#    separator: "Finish"
+#    separate_idx: 1
+
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: True
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+fp16: True
+fp16_bfloat16: True
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

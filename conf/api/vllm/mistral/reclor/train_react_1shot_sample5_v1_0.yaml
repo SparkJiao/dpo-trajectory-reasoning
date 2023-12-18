@@ -1,0 +1,45 @@
+defaults:
+  - hydra: default
+  - reader/reclor@read_tensor: react_service_1shot_v1_0
+  - post_process: openai_react
+  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/reclor_data/train.json
+dev_file: ../research.data/reclor_data/val.json
+test_file: ${train_file}
+
+save_best: False
+exp_name:
+exp_notes:
+output_dir: ../pretrained-models/Mixtral-8x7B-Instruct-v0.1
+eval_sub_path:
+
+output_file: ${output_dir}/reclor.react.train.1shot.sample5.v1.0.json
+flush_file: ${output_file}l
+
+# Dataloader
+num_workers: 32
+prefetch_factor: 2
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+fp16: True
+fp16_bfloat16: True
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

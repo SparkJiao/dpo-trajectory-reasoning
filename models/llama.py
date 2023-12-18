@@ -253,6 +253,29 @@ class LlamaForCausalLMDPO(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
             policy_rejected_logits=policy_reject_logits,
         )
 
+    def save_pretrained(
+            self,
+            save_directory: Union[str, os.PathLike],
+            is_main_process: bool = True,
+            state_dict: Optional[dict] = None,
+            save_function: Callable = torch.save,
+            push_to_hub: bool = False,
+            max_shard_size: Union[int, str] = "5GB",
+            safe_serialization: bool = True,
+            variant: Optional[str] = None,
+            token: Optional[Union[str, bool]] = None,
+            save_peft_format: bool = True,
+            **kwargs,
+    ):
+        super().save_pretrained(save_directory, is_main_process, state_dict, save_function, push_to_hub, max_shard_size, safe_serialization, variant, token,
+                                **kwargs)
+
+        if is_main_process:
+            config = self.config
+            config.architectures = ["LlamaForCausalLM"]
+            config.save_pretrained(save_directory)
+            logger.warning("Config architecture is override to LlamaForCausalLM")
+
 
 class LlamaRewardModel(PreTrainedModelPeftMixin, LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig):

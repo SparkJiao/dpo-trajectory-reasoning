@@ -1,8 +1,7 @@
 defaults:
   - hydra: default
-  - reader/logiqav2@read_tensor: react_service_0shot_v1_0
+  - reader/logiqav2@read_tensor: react_service_1shot_v1_0
   - post_process: openai_react
-  - api/vllm/vllm_params@sampling_params: sampling_param_greedy
   - _self_
 
 hydra:
@@ -13,15 +12,16 @@ train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
 dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
 
-step: 1600
-port: 6000
-#exp_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.0/
-exp_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.1
-model: llama-2-7b-70bdistil-step-dpo-v1.1-cp1600
-read_tensor:
-  template_id: 6
+step:
+port: 8000
+exp_dir:
+model:
 
-output_file: ${exp_dir}/checkpoint-${step}/logiqav2-test.full.qa.react.v1.0.0shot.json
+instruction:
+  _target_: data.prompts.logiqav2.react.prompts.get_prompt
+  prompt_name: react_v2_mistral
+
+output_file: ${exp_dir}/logiqav2-test.qa.react.v1.1.1shot.json
 flush_file: ${output_file}l
 
 # Dataloader

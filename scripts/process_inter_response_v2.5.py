@@ -5,6 +5,7 @@ import os
 from glob import glob
 from tqdm import tqdm
 import re
+import random
 
 """
 Version 2.1
@@ -15,9 +16,14 @@ Version 2.3
 
 In this version, we will control the step ratio difference between two states to be compared.
 
+
 Version 2.4
 
 Use negative threshold to filter out the longer sequences where the former steps have already possibly been wrong.
+
+Version 2.5
+
+Add step_id clipping to filter out too short sequences.
 """
 
 
@@ -52,7 +58,13 @@ def main():
     parser.add_argument("--step_ratio_diff", type=float, default=0.4)
     parser.add_argument("--negative_threshold", type=float, default=1.0)
     parser.add_argument("--early_stop", action="store_true", default=False)
+    parser.add_argument("--step_id_clip", type=str, default="(6,30)")
+    parser.add_argument("--negative_sample_num", type=int, default=2)
+    parser.add_argument("--exclude_full", action="store_true", default=False)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
+
+    random.seed(args.seed)
 
     if os.path.exists(args.input_file):
         files = [args.input_file]
@@ -92,6 +104,8 @@ def main():
     for state_file in inter_state_files:
         inter_states.extend(json.load(open(state_file, "r")))
 
+    step_id_clip = eval(args.step_id_clip)
+
     outputs = []
     jumped = 0
     masked = 0
@@ -114,6 +128,8 @@ def main():
         resp_id2states = collections.defaultdict(list)
         for x_id, x in enumerate(item["inter_states"]):
             if x_id not in state_id2values[idx]:
+                continue
+            if x["step_id"] < step_id_clip[0] or x["step_id"] > step_id_clip[1]:
                 continue
             resp_id2states[x["resp_id"]].append(x)
 
@@ -159,44 +175,45 @@ def main():
 
             all_rationales.append(resp_full_state)
 
-        for r_i, r in enumerate(all_rationales):
-            for r_j, r2 in enumerate(all_rationales[r_i + 1:]):
-                if abs(r["step_ratio"] - r2["step_ratio"]) > args.step_ratio_diff:
-                    continue
-                if r["value"] - r2["value"] >= args.diff:
-                    if r["step_ratio"] < r2["step_ratio"]:
-                        num_partial_shorter_win += 1
-                    elif r["step_ratio"] > r2["step_ratio"]:
-                        num_partial_longer_win += 1
-                    if r["is_full"] and not r2["is_full"]:
-                        num_cross_full_win += 1
-                    elif not r["is_full"] and r2["is_full"]:
-                        num_cross_part_win += 1
-                    outputs.append({
-                        "id": idx,
-                        "chosen": r["state"],
-                        "reject": r2["state"],
-                        "chosen_full": r["is_full"],
-                        "reject_full": r2["is_full"],
-                        "val_diff": r["value"] - r2["value"],
-                    })
-                elif r["value"] - r2["value"] <= -args.diff:
-                    if r["step_ratio"] < r2["step_ratio"]:
-                        num_partial_longer_win += 1
-                    elif r["step_ratio"] > r2["step_ratio"]:
-                        num_partial_shorter_win += 1
-                    if not r["is_full"] and r2["is_full"]:
-                        num_cross_full_win += 1
-                    elif r["is_full"] and not r2["is_full"]:
-                        num_cross_part_win += 1
-                    outputs.append({
-                        "id": idx,
-                        "chosen": r2["state"],
-                        "reject": r["state"],
-                        "chosen_full": r2["is_full"],
-                        "reject_full": r["is_full"],
-                        "val_diff": r2["value"] - r["value"],
-                    })
+        value2rationales = collections.defaultdict(list)
+        for r in all_rationales:
+            value2rationales[r["value"]].append(r)
+
+        values = list(value2rationales.keys())
+        values.sort(reverse=True)
+        for chosen_v in values:
+            if chosen_v - args.diff < 0:
+                break
+            if len(value2rationales[chosen_v]) == 1:
+                continue
+            for chosen in value2rationales[chosen_v]:
+                for reject_v in range(0, int(chosen_v - args.diff + 1)):
+                    if reject_v not in value2rationales:
+                        continue
+                    tmp = []
+                    for reject in value2rationales[reject_v]:
+                        if abs(chosen["step_ratio"] - reject["step_ratio"]) > args.step_ratio_diff:
+                            continue
+                        if args.exclude_full and chosen["is_full"] and reject["is_full"]:
+                            continue
+                        if chosen["step_ratio"] < reject["step_ratio"]:
+                            num_partial_shorter_win += 1
+                        elif chosen["step_ratio"] > reject["step_ratio"]:
+                            num_partial_longer_win += 1
+                        if chosen["is_full"] and not reject["is_full"]:
+                            num_cross_full_win += 1
+                        elif not chosen["is_full"] and reject["is_full"]:
+                            num_cross_part_win += 1
+                        tmp.append({
+                            "id": idx,
+                            "chosen": chosen["state"],
+                            "reject": reject["state"],
+                            "chosen_full": chosen["is_full"],
+                            "reject_full": reject["is_full"],
+                            "val_diff": chosen["value"] - reject["value"],
+                        })
+                    if len(tmp) > 0:
+                        outputs.extend(random.sample(tmp, min(len(tmp), args.negative_sample_num)))
 
     print(f"Jumped: {jumped}")
     print(len(outputs))

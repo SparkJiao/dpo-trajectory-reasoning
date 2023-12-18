@@ -13,15 +13,20 @@ train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
 dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 
-step: 1600
-port: 6000
-#exp_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.0/
-exp_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v1.1
-model: llama-2-7b-70bdistil-step-dpo-v1.1-cp1600
+save_best: False
+exp_name:
+exp_notes:
+output_dir: experiments/${exp_name}
+
+step: 800
+eval_sub_path: checkpoint-${step}
+
 read_tensor:
   template_id: 6
+  service_based: False
+  service_processor:
 
-output_file: ${exp_dir}/checkpoint-${step}/logiqav2-dev.full.qa.react.v1.0.0shot.json
+output_file: ${output_dir}/${eval_sub_path}/logiqav2-dev.full.qa.react.v1.0.0shot.json
 flush_file: ${output_file}l
 
 # Dataloader
@@ -34,6 +39,8 @@ seed: 42
 local_rank: -1
 
 # Temporary variables
+fp16: True
+fp16_bfloat16: True
 n_gpu: 1
 device:
 train_batch_size:

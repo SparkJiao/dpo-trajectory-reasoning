@@ -2,15 +2,23 @@ data_dir=experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.
 #diff=3.0
 #diff=2.6
 #diff=2.1
-diff=3.0
+#diff=3.0
+diff=2.0
 #decay=0.9
 #decay=0.8
 #decay=0.95
 #decay=0.9
 #decay=1.0
-step_ratio_diff=0.4
-negative_threshold=0.0
-
+#step_ratio_diff=0.4
+step_ratio_diff=0.3
+#negative_threshold=0.0
+#negative_threshold=-1.0
+#negative_threshold=0.0
+negative_threshold=1.0
+step_id_clip="[5,30]"
+#negative_num=2
+negative_num=1
+seed=42
 
 #chosen_l=1.5
 #chosen_l=1.0
@@ -63,11 +71,46 @@ margin=1.2
 #  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json" \
 #  --diff $diff --step_ratio_diff $step_ratio_diff --negative_threshold $negative_threshold
 
-python scripts/process_inter_response_v2.4.py \
+#python scripts/process_inter_response_v2.4.py \
+#  --input_file "$data_dir/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.*-of-20.sample3.json" \
+#  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.4.rs0.2.r0.3.sample3.diff$diff.step_r_diff$step_ratio_diff.mask$negative_threshold.early.json" \
+#  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json" \
+#  --diff $diff --step_ratio_diff $step_ratio_diff --negative_threshold $negative_threshold --early_stop
+
+
+#python scripts/process_inter_response_v2.5.py \
+#  --input_file "$data_dir/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.*-of-20.sample3.json" \
+#  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.5.rs0.2.r0.3.sample3.diff$diff.step_r_diff$step_ratio_diff.mask$negative_threshold.step$step_id_clip.ne$negative_num.s$seed.json" \
+#  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json" \
+#  --diff $diff --step_ratio_diff $step_ratio_diff --negative_threshold $negative_threshold --step_id_clip $step_id_clip --negative_sample_num $negative_num --seed 42
+
+#python scripts/process_inter_response_v2.5.py \
+#  --input_file "$data_dir/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.*-of-20.sample3.json" \
+#  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.5.rs0.2.r0.3.sample3.diff$diff.step_r_diff$step_ratio_diff.mask$negative_threshold.step$step_id_clip.ne$negative_num.s$seed.ex_full.json" \
+#  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json" \
+#  --diff $diff --step_ratio_diff $step_ratio_diff --negative_threshold $negative_threshold --step_id_clip $step_id_clip --negative_sample_num $negative_num --seed 42 --exclude_full
+
+#python scripts/process_inter_response_v2.5.py \
+#  --input_file "$data_dir/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.*-of-20.sample3.json" \
+#  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.5.rs0.2.r0.3.sample3.diff$diff.step_r_diff$step_ratio_diff.mask$negative_threshold.step$step_id_clip.ne$negative_num.s$seed.ex_full.json" \
+#  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json" \
+#  --diff $diff --step_ratio_diff $step_ratio_diff --negative_threshold $negative_threshold --step_id_clip $step_id_clip --negative_sample_num $negative_num --seed 42 --exclude_full
+
+
+#python scripts/process_inter_response_v2.5.py \
+#  --input_file "$data_dir/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.*-of-20.sample3.json" \
+#  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.5.rs0.2.r0.3.sample3.diff$diff.step_r_diff$step_ratio_diff.mask$negative_threshold.step$step_id_clip.ne$negative_num.s$seed.ex_full.json" \
+#  --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json" \
+#  --diff $diff --step_ratio_diff $step_ratio_diff --negative_threshold $negative_threshold --step_id_clip $step_id_clip --negative_sample_num $negative_num --seed 42 --exclude_full
+
+
+python scripts/process_inter_response_v2.6.py \
   --input_file "$data_dir/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.*-of-20.sample3.json" \
-  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.4.rs0.2.r0.3.sample3.diff$diff.step_r_diff$step_ratio_diff.mask$negative_threshold.early.json" \
+  --output_file "$data_dir/value-ver2.0/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.6.rs0.2.r0.3.sample3.diff$diff.step_r_diff$step_ratio_diff.mask$negative_threshold.step$step_id_clip.ne$negative_num.s$seed.json" \
   --inter_state_file "$data_dir/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.*-of-20.json" \
-  --diff $diff --step_ratio_diff $step_ratio_diff --negative_threshold $negative_threshold --early_stop
+  --diff $diff --step_ratio_diff $step_ratio_diff --negative_threshold $negative_threshold --step_id_clip $step_id_clip --negative_sample_num $negative_num --seed 42
+
+# ===================================================================================================
 
 
 # Filtering by predicted rewards
