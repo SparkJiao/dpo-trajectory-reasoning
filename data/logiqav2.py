@@ -110,7 +110,7 @@ class SubResponseMergeReader(LogicQAReader):
 
 
 class ComposePromptGenerator(Dataset):
-    def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer, read_func, template_id: int = 0,
+    def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer, read_func, template_id: Union[int, str] = 0,
                  instruction: str = "", few_shot_prompt: str = "",
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  max_data_num: int = -1,
@@ -142,6 +142,7 @@ class ComposePromptGenerator(Dataset):
         self.inputs = []
         self.indices = []
         self.labels = []
+        template = templates[template_id] if isinstance(template_id, int) else template_id
         for i in range(len(self.input_data)):
             idx = self.input_data[i]["id"] if "id" in self.input_data[i] else i
             if idx in flushed_data:
@@ -154,7 +155,8 @@ class ComposePromptGenerator(Dataset):
                 _input += self.few_shot_prompt + "\n\n"
 
             params = [self.input_data[i][key] for key in self.compose_keys]
-            _input += templates[template_id].format(*params)
+            # _input += templates[template_id].format(*params)
+            _input += template.format(*params)
 
             self.inputs.append(_input)
             # if "id" in self.input_data[i]:

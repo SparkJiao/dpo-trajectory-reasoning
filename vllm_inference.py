@@ -114,19 +114,19 @@ def evaluate(cfg: DictConfig, model: vllm.LLM, prefix="", _split="dev"):
 
 @hydra.main(config_path="conf", config_name="config", version_base="1.2")
 def main(cfg: DictConfig):
-    if "LOCAL_RANK" in os.environ and os.environ["LOCAL_RANK"] not in [-1, "-1"]:
-        cfg.local_rank = int(os.environ["LOCAL_RANK"])
-
-    if cfg.local_rank == -1 or cfg.no_cuda:
-        device = str(torch.device("cuda" if torch.cuda.is_available() and not cfg.no_cuda else "cpu"))
-        cfg.n_gpu = torch.cuda.device_count()
-    else:  # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
-        torch.cuda.set_device(cfg.local_rank)
-        device = str(torch.device("cuda", cfg.local_rank))
-        dist.init_process_group(backend="nccl", timeout=datetime.timedelta(seconds=7200))
-        cfg.n_gpu = 1
-        cfg.world_size = dist.get_world_size()
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.local_rank)
+    # if "LOCAL_RANK" in os.environ and os.environ["LOCAL_RANK"] not in [-1, "-1"]:
+    #     cfg.local_rank = int(os.environ["LOCAL_RANK"])
+    #
+    # if cfg.local_rank == -1 or cfg.no_cuda:
+    device = str(torch.device("cuda" if torch.cuda.is_available() and not cfg.no_cuda else "cpu"))
+    cfg.n_gpu = torch.cuda.device_count()
+    # else:  # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
+    #     torch.cuda.set_device(cfg.local_rank)
+    #     device = str(torch.device("cuda", cfg.local_rank))
+    #     dist.init_process_group(backend="nccl", timeout=datetime.timedelta(seconds=7200))
+    #     cfg.n_gpu = 1
+    #     cfg.world_size = dist.get_world_size()
+    #     os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.local_rank)
     cfg.device = device
 
     global logger
@@ -161,7 +161,9 @@ def main(cfg: DictConfig):
 
         model = vllm.LLM(model=checkpoint,
                          tensor_parallel_size=cfg.n_gpu,
-                         swap_space=getattr(cfg, "swap_space", 4),)
+                         swap_space=getattr(cfg, "swap_space", 4),
+                         gpu_memory_utilization=getattr(cfg, "gpu_memory_utilization", 0.9),
+                         load_format=getattr(cfg, "load_format", "auto"),)
 
         if cfg.test_file:
             prefix = f'test' + (f'-{prefix}' if prefix != "" else "")

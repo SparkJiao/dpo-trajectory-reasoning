@@ -1,0 +1,79 @@
+defaults:
+  - hydra: default
+  - api/vllm/vllm_params@sampling_params: sampling_param_greedy
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+
+save_best: True
+exp_name:
+exp_notes:
+output_dir: experiments/${exp_name}
+
+sampling_params:
+  max_tokens: 4096
+
+data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states
+#data_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.dpo.H100.w4.v1.0/checkpoint-1600/react-inter-states
+dataset_split_id: 0
+
+output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.1.rs0.4.r0.2.${dataset_split_id}-of-4.modify_worse.0shot.mixtral.json
+flush_file: ${output_file}l
+
+# Data loading
+read_tensor:
+  _target_: data.logiqav2.ComposePromptGenerator
+  read_func:
+    _target_: data.logiqav2.SubResponseMergeReader
+    inter_states_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.1.rs0.4.r0.2.${dataset_split_id}-of-4.json
+    flat_options: True
+  template_id:
+    _target_: data.general.get_template
+    template_id: 1
+  instruction:
+    _target_: data.general.get_prompt
+#    prompt_name: modify_worse_v1
+    prompt_name: modify_worse_v4_mistral
+  compose_keys: [ "context", "question", "option_list", "response" ]
+  max_data_num: -1
+  api_based: False
+  service_based: False
+  flush_file: ${flush_file}
+
+# Dataloader
+num_workers: 32
+prefetch_factor: 2
+
+post_process:
+  _target_: post_processors.openai_api_callback.OpenAICallBack
+  output_file: ${output_file}
+  answer_clean:
+    _target_: post_processors.openai_api_callback.ReActSeparatorClean
+#    prompt: "few-shot"
+#    separator: "Finish"
+#    separate_idx: 1
+
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: True
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+fp16: True
+fp16_bfloat16: True
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:
