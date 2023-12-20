@@ -111,12 +111,6 @@ class DPOMergeDataset(ComposeDatasetMixin):
                         abandoned.append(pair_sample)
                         continue
 
-                    # chosen = pair_sample["chosen"]
-                    # reject = pair_sample["reject"]
-                    # assert "is_full" in pair_sample, pair_sample  # Just for debug. Please comment this if you're sure the data is correct.
-                    # if "is_full" not in pair_sample or pair_sample["is_full"]:
-                    #     chosen = chosen + tokenizer.eos_token
-                    #     reject = reject + tokenizer.eos_token
                     chosen = self.append_eos(pair_sample, "chosen", tokenizer.eos_token)
                     reject = self.append_eos(pair_sample, "reject", tokenizer.eos_token)
                     item["chosen"] = chosen

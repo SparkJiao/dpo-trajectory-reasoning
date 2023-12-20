@@ -141,3 +141,25 @@ class ReActResponseMergeReader:
             new_item["id"] = f"{item_id}_{resp_id}"
             outputs.append(new_item)
         return outputs
+
+
+class WorsenInterStateMergeReader:
+    def __init__(self, response_file, original_reader: LogicQAReader = LogicQAReader()):
+        self.original_reader = original_reader
+        self.responses = json.load(open(response_file, "r"))
+
+    def __call__(self, file):
+        original_data = self.original_reader(file)
+        id2original_data = {idx: item for idx, item in enumerate(original_data)}
+
+        outputs = []
+        for item in self.responses:
+            item_id, inter_state_id = item["id"].split("_")
+            item_id = int(item_id)
+            assert item_id in id2original_data, item_id
+            original_item = id2original_data[item_id]
+            new_item = copy.deepcopy(original_item)
+            new_item["response"] = item["response"].strip()
+            new_item["id"] = f"{item_id}_{inter_state_id}"
+            outputs.append(new_item)
+        return outputs

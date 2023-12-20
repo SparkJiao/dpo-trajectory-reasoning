@@ -26,8 +26,8 @@ data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1
 dataset_split_id: 0
 
 #output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.1.rs0.4.r0.2.${dataset_split_id}-of-4.modify_worse.1shot.mixtral.json
-#output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.1.rs0.4.r0.2.${read_tensor.split_id}-${read_tensor.split_size}.${dataset_split_id}-of-4.modify_worse.1shot.mixtral.json
-output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.1.rs0.4.r0.2.${read_tensor.split_id}-${read_tensor.split_size}.${dataset_split_id}-of-4.modify_worse.1shot.mistral-7b.json
+output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.1.rs0.4.r0.2.${read_tensor.split_id}-${read_tensor.split_size}.${dataset_split_id}-of-4.modify_worse.1shot.mixtral.json
+#output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.1.rs0.4.r0.2.${read_tensor.split_id}-${read_tensor.split_size}.${dataset_split_id}-of-4.modify_worse.1shot.mistral-7b.json
 #output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.1.rs0.4.r0.2.${dataset_split_id}-of-4.modify_worse.1shot.llama2-70b-chat.json
 flush_file: ${output_file}l
 
