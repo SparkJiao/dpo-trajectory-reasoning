@@ -1,33 +1,23 @@
-import json
 import os
-from abc import ABC
 from dataclasses import dataclass
-from typing import Optional, List, Tuple, Union
+from typing import Optional
 
 import bitsandbytes as bnb
 import hydra.utils
 import omegaconf
 import torch
-import torch.nn.functional as F
-from einops import rearrange
+from omegaconf import DictConfig
 from peft import (
     LoraConfig,
     get_peft_model,
     TaskType,
-    PeftModel,
     prepare_model_for_kbit_training,
 )
 from peft.tuners.lora import LoraLayer
-from torch import nn
-import torch.distributed as dist
-from transformers import AutoTokenizer, PreTrainedModel
-from omegaconf import DictConfig, ListConfig
-from transformers.models.llama.modeling_llama import LlamaModel, LlamaPreTrainedModel, LlamaConfig, \
-    SequenceClassifierOutputWithPast, \
-    LlamaDecoderLayer, LlamaForCausalLM, apply_rotary_pos_emb, repeat_kv
+from transformers import PreTrainedModel
+from transformers.modeling_outputs import ModelOutput
 
 from general_util.logger import get_child_logger
-from general_util.mixin import LogMixin
 from general_util.training_utils import get_rank
 
 logger = get_child_logger(__name__)
@@ -100,3 +90,19 @@ def enable_gradient_checkpointing(model: PreTrainedModel):
     model.config.use_cache = False
     model.gradient_checkpointing_enable()
     return model
+
+
+@dataclass
+class DPOModelOutput(ModelOutput):
+    loss: torch.FloatTensor = None
+    logits: torch.FloatTensor = None
+    chosen_reward: torch.FloatTensor = None
+    rejected_reward: torch.FloatTensor = None
+    policy_chosen_logits: Optional[torch.FloatTensor] = None
+    policy_rejected_logits: Optional[torch.FloatTensor] = None
+    batch_chosen_reward: Optional[torch.FloatTensor] = None
+    batch_rejected_reward: Optional[torch.FloatTensor] = None
+
+
+def return_single_device_map():
+    return {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}

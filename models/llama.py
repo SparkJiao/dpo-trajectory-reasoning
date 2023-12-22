@@ -1,5 +1,4 @@
 import os
-from dataclasses import dataclass
 from logging import Logger
 from typing import Optional, Union, Tuple, List, Callable
 
@@ -14,7 +13,6 @@ from peft import (
 )
 from peft.tuners.lora import LoraLayer
 from torch import nn
-from transformers.modeling_outputs import ModelOutput
 from transformers.models.llama.modeling_llama import (
     LlamaForCausalLM as HfLlamaForCausalLM,
     PreTrainedModel,
@@ -26,21 +24,11 @@ from transformers.models.llama.modeling_llama import (
 
 from general_util.logger import get_child_logger
 from general_util.training_utils import get_rank
+from models.utils import DPOModelOutput
 
 logger: Logger = get_child_logger(__name__)
 
 REFERENCE_MODEL: HfLlamaForCausalLM
-
-
-@dataclass
-class DPOModelOutput(ModelOutput):
-    loss: torch.FloatTensor = None
-    chosen_reward: torch.FloatTensor = None
-    rejected_reward: torch.FloatTensor = None
-    policy_chosen_logits: Optional[torch.FloatTensor] = None
-    policy_rejected_logits: Optional[torch.FloatTensor] = None
-    batch_chosen_reward: Optional[torch.FloatTensor] = None
-    batch_rejected_reward: Optional[torch.FloatTensor] = None
 
 
 def return_single_device_map():
@@ -150,7 +138,7 @@ def llama_dpo_batch_forward(model: HfLlamaForCausalLM, input_ids: torch.LongTens
 
 def llama_last_token_cls_batch_forward(model: LlamaModel, linear: nn.Linear,
                                        input_ids: torch.LongTensor, attention_mask: torch.Tensor,
-                                       pad_token_id: int, ):
+                                       pad_token_id: int, return_full_logits: bool = False):
     transformer_outputs = model(
         input_ids,
         attention_mask=attention_mask,
@@ -159,6 +147,11 @@ def llama_last_token_cls_batch_forward(model: LlamaModel, linear: nn.Linear,
 
     batch_size = input_ids.shape[0]
     sequence_lengths = (torch.eq(input_ids, pad_token_id).long().argmax(-1) - 1).to(device=hidden_states.device)
+
+    if return_full_logits:
+        rewards = linear(hidden_states)
+        return rewards, sequence_lengths
+
     last_token_states = hidden_states[torch.arange(batch_size, device=hidden_states.device), sequence_lengths]
     rewards = linear(last_token_states)
     return rewards, sequence_lengths
@@ -340,6 +333,54 @@ class LlamaRewardModelForEval(LlamaRewardModel):
         rewards, sequence_lengths = llama_last_token_cls_batch_forward(self.model, self.score, input_ids, attention_mask, self.config.pad_token_id)
         return DPOModelOutput(
             batch_chosen_reward=rewards,
+        )
+
+
+class LlamaModelForSequenceClassification(PreTrainedModelPeftMixin, LlamaPreTrainedModel):
+    def __init__(self, config: LlamaConfig):
+        super().__init__(config)
+        self.model = LlamaModel(config)
+        self.score = nn.Linear(config.hidden_size, config.num_labels, bias=False)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def forward(
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            values: Optional[torch.LongTensor] = None,
+            labels: Optional[torch.LongTensor] = None,
+            use_cache: Optional[bool] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
+            **kwargs,
+    ) -> Union[Tuple, DPOModelOutput]:
+        half = input_ids.size(0) // 2
+
+        rewards, sequence_lengths = llama_last_token_cls_batch_forward(self.model, self.score, input_ids, attention_mask, self.config.pad_token_id)
+
+        loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(rewards, values)
+
+        return DPOModelOutput(
+            loss=loss,
+            logits=rewards,
+        )
+
+
+class LlamaModelForSequenceClassificationForEval(LlamaModelForSequenceClassification):
+    def forward(
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            **kwargs,
+    ) -> Union[Tuple, DPOModelOutput]:
+        rewards, sequence_lengths = llama_last_token_cls_batch_forward(self.model, self.score, input_ids, attention_mask, self.config.pad_token_id,
+                                                                       return_full_logits=True)
+        return DPOModelOutput(
+            logits=rewards,
         )
 
 

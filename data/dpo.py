@@ -560,7 +560,8 @@ class PairwiseRewardDataset(ComposeDatasetMixin):
                  instruction: str = "", few_shot_prompts: str = "",
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  format_filter: Optional[Callable] = None,
-                 re_index: bool = False, ):
+                 re_index: bool = False,
+                 add_eos_token: bool = True):
         super().__init__(template, instruction, few_shot_prompts, compose_keys)
 
         self.tokenizer = tokenizer
@@ -586,8 +587,9 @@ class PairwiseRewardDataset(ComposeDatasetMixin):
 
                     chosen = pair_sample["chosen"]
                     reject = pair_sample["reject"]
-                    chosen = chosen + tokenizer.eos_token
-                    reject = reject + tokenizer.eos_token
+                    if add_eos_token:
+                        chosen = chosen + tokenizer.eos_token
+                        reject = reject + tokenizer.eos_token
 
                     item["chosen"] = chosen
                     item["reject"] = reject
@@ -734,7 +736,8 @@ class InterStatesRewardingDataset(ComposeDatasetMixin):
                  instruction: str = "", few_shot_prompts: str = "",
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  format_filter: Optional[Callable] = None,
-                 re_index: bool = False, ):
+                 re_index: bool = False,
+                 add_eos_token: bool = True, ):
         super().__init__(template, instruction, few_shot_prompts, compose_keys)
 
         self.tokenizer = tokenizer
@@ -787,6 +790,7 @@ class InterStatesRewardingDataset(ComposeDatasetMixin):
         self.instruction = instruction
         self.few_shot_prompts = few_shot_prompts
         self.compose_keys = compose_keys
+        self.add_eos_token = add_eos_token
 
         if format_filter:
             logger.info(f"Abandoned some of non-format examples:\n{len(abandoned)}")
@@ -796,7 +800,10 @@ class InterStatesRewardingDataset(ComposeDatasetMixin):
 
     def __getitem__(self, index):
         item = self.data[index]
-        prompt, _input = self.compose_input(item, item["response"] + self.tokenizer.eos_token)
+        if self.add_eos_token:
+            prompt, _input = self.compose_input(item, item["response"] + self.tokenizer.eos_token)
+        else:
+            prompt, _input = self.compose_input(item, item["response"])
 
         return {
             "prompt": prompt,

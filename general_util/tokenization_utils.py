@@ -19,7 +19,7 @@ def tokenizer_get_name(_tokenizer: PreTrainedTokenizer):
 
 def expand_special_tokenizer(tokenizer: PreTrainedTokenizer):
     tokenizer_name = tokenizer_get_name(tokenizer)
-    if "llama" in tokenizer_name:
+    if "llama" in tokenizer_name or "mistral" in tokenizer_name:
         special_tokens_map = {}
         eos_token = os.environ.get("EOS_TOKEN", None)
         if eos_token or (not tokenizer.eos_token):
