@@ -1,8 +1,8 @@
 defaults:
   - hydra: default
-  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero2_optim_offload
-#  - deepspeed@ds_cfg: train_hybrid_engine_zero2
+  - deepspeed@ds_cfg: train_hybrid_engine_zero2
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero3  # Zero-3 works on 4*A40 300 hours per epoch
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
 
@@ -11,8 +11,7 @@ hydra:
     - file://conf/
 
 data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600
-#train_file: ${data_dir}/react-inter-states/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v11_best_of_3.neg4.pos0.5.v1.2.pair.full_only.json
-train_file: ${data_dir}/react-inter-states/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v11_best_of_3.neg4.pos0.5.v1.2.pair.full_only.fix.json
+train_file: ${data_dir}/react-inter-states/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v12_best_of_3.neg4.pos0.3.v1.2.pair.full_only.json
 dev_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.dpo_pair.sub_dev.json
 test_file:
 
@@ -79,7 +78,8 @@ model_name_or_path: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft
 pretrain:
 
 
-exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w2.v7.0.fix.s${seed}
+#exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v7.1.s${seed}
+exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w4.v7.4.s${seed}
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -96,7 +96,7 @@ per_gpu_eval_batch_size: 8
 #learning_rate: 1e-4
 #learning_rate: 5e-6
 learning_rate: 1e-6
-gradient_accumulation_steps: 8
+gradient_accumulation_steps: 4
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"

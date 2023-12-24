@@ -1,0 +1,74 @@
+defaults:
+  - hydra: default
+  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+  - post_process: openai_react
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/reclor_data/train.json
+dev_file: ../research.data/reclor_data/val.json
+test_file: ${train_file}
+
+save_best: True
+exp_name:
+exp_notes:
+output_dir: experiments/${exp_name}
+
+#data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states
+#data_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.dpo.H100.w4.v1.0/checkpoint-1600/react-inter-states
+data_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/react-inter-states/
+
+output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.0.rs0.4.r0.3.sample3.json
+flush_file: ${output_file}l
+
+# Data loading
+read_tensor:
+  _target_: data.logiqav2.ComposePromptGenerator
+  read_func:
+    _target_: data.logiqav2.SubResponseMergeReader
+    original_reader:
+      _target_: data.reclor.ReClorReader
+      flat_options: True
+    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json
+  template_id: 9
+  instruction:
+    _target_: data.prompts.logiqav2.react.prompts.get_prompt
+    prompt_name: react_v2
+  compose_keys: [ "context", "question", "option_list", "response" ]
+  max_data_num: -1
+  api_based: False
+  service_based: True
+  service_processor:
+    _target_: data.vllm.VLLMRequestGenerator
+    api_url: http://0.0.0.0:6000/v1/completions
+    max_tokens: 3072
+    model: llama2-7b-reclor-distil
+    stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
+    n: 3
+    temperature: 1.0
+  flush_file: ${flush_file}
+
+# Dataloader
+num_workers: 32
+prefetch_factor:
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: True
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+fp16: True
+fp16_bfloat16: True
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

@@ -1,6 +1,8 @@
 import argparse
 import json
+import os.path
 import re
+from glob import glob
 
 
 # Copied from scripts.process_react_nodes.py
@@ -46,7 +48,16 @@ def main():
     parser.add_argument("--output_file", type=str)
     args = parser.parse_args()
 
-    data = json.load(open(args.input_file))
+    if os.path.exists(args.input_file):
+        files = [args.input_file]
+    else:
+        files = glob(args.input_file)
+    print(files)
+    data = []
+    for file in files:
+        data.extend(json.load(open(file)))
+    # data = json.load(open(args.input_file))
+    print(len(data))
 
     cleaned_data = []
     for item in data:

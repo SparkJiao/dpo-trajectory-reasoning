@@ -2,7 +2,8 @@ defaults:
   - hydra: default
 #    - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload_lr  # Zero-1 w/ Optimizer offlad works on 4*A40 with 140 hours per epoch.  224GB CPU memory
   #  - deepspeed@ds_cfg: train_hybrid_engine_zero2_optim_offload
-  - deepspeed@ds_cfg: train_hybrid_engine_zero2
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero2
+  - deepspeed@ds_cfg: train_hybrid_engine_zero1
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero1_lr
   #  - deepspeed@ds_cfg: train_hybrid_engine_zero3  # Zero-3 works on 4*A40 300 hours per epoch
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
@@ -13,7 +14,7 @@ hydra:
 
 data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/
 attempt_response_file: ${data_dir}/react-inter-states/process-rm/logiqav2-train.qa.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.sample3.json
-inter_states_file_train: ${data_dir}/react-inter-states/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.[1-3]-of-20.json
+inter_states_file_train: ${data_dir}/react-inter-states/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.[1-2]-of-20.json
 inter_states_file_dev: ${data_dir}/react-inter-states/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.0-of-20.json
 
 train_file: ${attempt_response_file}
@@ -55,8 +56,8 @@ read_tensor_train:
   reader:
     _target_: data.general.PartialTrajAttemptsReader
     partial_traj_file: ${inter_states_file_train}
-  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"
-  compose_keys: [ "context", "question", "option_list", "response" ]
+  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
+  compose_keys: [ "context", "question", "option_list" ]
 
 
 read_tensor:
@@ -71,8 +72,10 @@ read_tensor:
   reader:
     _target_: data.general.PartialTrajAttemptsReader
     partial_traj_file: ${inter_states_file_dev}
-  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"
-  compose_keys: [ "context", "question", "option_list", "response" ]
+#  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"
+#  compose_keys: [ "context", "question", "option_list", "response" ]
+  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
+  compose_keys: [ "context", "question", "option_list" ]
 
 dist_load_data_barrier: False
 
@@ -94,7 +97,8 @@ pretrain:
 resume:
 
 
-exp_name: llama2.7b.chat.logiqav2.70b-distil.prm.A100.40.w8.v1.2
+#exp_name: llama2.7b.chat.logiqav2.70b-distil.prm.A100.40.w8.v1.2
+exp_name: llama2.7b.chat.logiqav2.70b-distil.prm.H100.w4.v1.2.s${seed}.fix  # Fix the template problem
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -106,12 +110,12 @@ do_eval: False
 eval_sub_path: checkpoint-*
 
 # Training hyper-parameters
-per_gpu_train_batch_size: 1
+per_gpu_train_batch_size: 4
 per_gpu_eval_batch_size: 8
 #learning_rate: 1e-4
 #learning_rate: 5e-6
 learning_rate: 1e-6
-gradient_accumulation_steps: 8
+gradient_accumulation_steps: 4
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"
@@ -119,7 +123,7 @@ adam_betas: "(0.9, 0.98)"
 #max_grad_norm: 0.0
 total_dataset_len: -1
 max_grad_norm: 1.0
-num_train_epochs: 1
+num_train_epochs: 2
 max_steps: 0
 warmup_proportion: 0
 warmup_steps: 200

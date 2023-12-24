@@ -55,8 +55,8 @@ read_tensor_train:
   reader:
     _target_: data.general.PartialTrajAttemptsReader
     partial_traj_file: ${inter_states_file_train}
-  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"
-  compose_keys: [ "context", "question", "option_list", "response" ]
+  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
+  compose_keys: [ "context", "question", "option_list" ]
 
 
 read_tensor:
@@ -71,8 +71,10 @@ read_tensor:
   reader:
     _target_: data.general.PartialTrajAttemptsReader
     partial_traj_file: ${inter_states_file_dev}
-  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"
-  compose_keys: [ "context", "question", "option_list", "response" ]
+#  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: {}"
+#  compose_keys: [ "context", "question", "option_list", "response" ]
+  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
+  compose_keys: [ "context", "question", "option_list" ]
 
 dist_load_data_barrier: False
 
@@ -94,7 +96,8 @@ pretrain:
 resume:
 
 
-exp_name: llama2.7b.chat.logiqav2.70b-distil.prm.H100.w8.v1.1
+#exp_name: llama2.7b.chat.logiqav2.70b-distil.prm.H100.w8.v1.1.s${seed}.fix  # Fix the template problem.
+exp_name: llama2.7b.chat.logiqav2.70b-distil.prm.H100.w4.v1.1.s${seed}.fix  # Fix the template problem.
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -111,7 +114,7 @@ per_gpu_eval_batch_size: 8
 #learning_rate: 1e-4
 learning_rate: 5e-6
 #learning_rate: 1e-6
-gradient_accumulation_steps: 2
+gradient_accumulation_steps: 4
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"

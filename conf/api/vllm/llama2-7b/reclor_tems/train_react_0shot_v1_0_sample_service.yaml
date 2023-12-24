@@ -1,8 +1,8 @@
 defaults:
   - hydra: default
-  - reader/reclor@read_tensor: react_service_1shot_v1_0
+  - reader/reclor@read_tensor: react_service_0shot_v1_0
   - post_process: openai_react
-  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+#  - api/vllm/vllm_params@sampling_params: sampling_param_sample
   - _self_
 
 hydra:
@@ -16,28 +16,28 @@ test_file: ${train_file}
 save_best: False
 exp_name:
 exp_notes:
-output_dir: ../pretrained-models/Mixtral-8x7B-Instruct-v0.1
+output_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/
 eval_sub_path:
 
-sampling_params:
-  max_tokens: 4096
+#sampling_params:
+#  max_tokens: 3072
 gpu_memory_utilization: 0.95
 
 read_tensor:
-  split_size: 4
+  split_size: -1
   split_id: 0
   service_based: True
   service_processor:
     _target_: data.vllm.VLLMRequestGenerator
     api_url: http://0.0.0.0:6000/v1/completions
-    max_tokens: ${sampling_params.max_tokens}
-    model: mixtral-ins
+    max_tokens: 3072
+    model: llama2-7b-reclor-distil
     stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
-    n: ${sampling_params.n}
-    temperature: ${sampling_params.temperature}
+    n: 10
+    temperature: 1.0
   flush_file: ${flush_file}
 
-output_file: ${output_dir}/reclor.react.train.1shot.sample5.${read_tensor.split_id}-${read_tensor.split_size}.v1.0.json
+output_file: ${output_dir}/reclor.react.train.0shot.sample10.v1.0.json
 flush_file: ${output_file}l
 
 # Dataloader

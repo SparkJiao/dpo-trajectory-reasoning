@@ -1,19 +1,16 @@
 defaults:
   - hydra: default
-  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
-#  - deepspeed@ds_cfg: train_hybrid_engine_zero2_optim_offload
-#  - deepspeed@ds_cfg: train_hybrid_engine_zero2
-#  - deepspeed@ds_cfg: train_hybrid_engine_zero3  # Zero-3 works on 4*A40 300 hours per epoch
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
+  - deepspeed@ds_cfg: train_hybrid_engine_zero2
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
 
 hydra:
   searchpath:
     - file://conf/
 
-data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600
-#train_file: ${data_dir}/react-inter-states/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v11_best_of_3.neg4.pos0.5.v1.2.pair.full_only.json
-train_file: ${data_dir}/react-inter-states/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v11_best_of_3.neg4.pos0.5.v1.2.pair.full_only.fix.json
-dev_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample10.dpo_pair.sub_dev.json
+
+train_file: pretrained-models/Mixtral-8x7B-Instruct-v0.1/reclor.react.train.1shot.sample5.v1.0.clean_dpo.chosen.sub_train.json
+dev_file: pretrained-models/Mixtral-8x7B-Instruct-v0.1/reclor.react.train.1shot.sample5.v1.0.clean_dpo.chosen.sub_dev.json
 test_file:
 
 torch_dtype:
@@ -25,40 +22,28 @@ tokenizer_init:
   tokenizer_path: ${model_name_or_path}
   padding_side: left
 
-device_map:
-  _target_: models.llama.return_single_device_map
-
 model:
-  _target_: models.llama.LlamaForCausalLMDPO.from_pretrained_with_ref_model
-  beta: 0.1
+  _target_: models.llama.LlamaForCausalLM.from_pretrained
   gradient_checkpointing: True
   pad_token_id: 0
   attn_implementation: "flash_attention_2"
   torch_dtype: ${torch_dtype}
-  device_map: ${device_map}
-  ref_model:
-    _target_: transformers.models.llama.LlamaForCausalLM.from_pretrained
-    pretrained_model_name_or_path: ${model_name_or_path}
-    torch_dtype: ${torch_dtype}
-    attn_implementation: "flash_attention_2"
-    pad_token_id: 0
-    device_map: ${device_map}
-#    load_in_8bit: True  # 8-bit cannot use on H100
+  device_map:
+    _target_: models.llama.return_single_device_map
 
 
 # Data loading
 read_tensor:
-  _target_: data.dpo.DPOMergeDataset
-  original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+  _target_: data.dpo.DPOSFTDataset
+  original_data_file: ../research.data/reclor_data/train.json
   original_reader:
-    _target_: data.logiqav2.LogicQAReader
+    _target_: data.reclor.ReClorReader
     flat_options: True
   instruction:
     _target_: data.prompts.logiqav2.react.prompts.get_prompt
     prompt_name: react_v2
-  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n"
+  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
   compose_keys: [ "context", "question", "option_list" ]
-  format_filter:
 
 dist_load_data_barrier: False
 
@@ -66,7 +51,7 @@ extended_vocab:
 
 # Data collator
 collator:
-  _target_: data.dpo.DPOCollator
+  _target_: data.dpo.DPODataSFTCollator
   tokenizer: ${tokenizer_init}
   max_seq_length: 2048
 
@@ -75,28 +60,28 @@ num_workers: 8
 prefetch_factor: 2
 
 # Wiki path pretrain v8.2
-model_name_or_path: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600
+model_name_or_path: pretrained-models/Llama-2-7b-chat-hf
 pretrain:
+resume:
 
-
-exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.H100.w2.v7.0.fix.s${seed}
+exp_name: llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0
 exp_notes:
-output_dir: experiments/${exp_name}
+output_dir: experiments/${exp_name}  # Fix <pad token id>
 
 
 do_train: True
 evaluate_during_training: True
 
-do_eval: False
+do_eval: True
 eval_sub_path: checkpoint-100
 
 # Training hyper-parameters
-per_gpu_train_batch_size: 4
-per_gpu_eval_batch_size: 8
+per_gpu_train_batch_size: 3
+per_gpu_eval_batch_size: 6
 #learning_rate: 1e-4
 #learning_rate: 5e-6
-learning_rate: 1e-6
-gradient_accumulation_steps: 8
+learning_rate: 1e-5
+gradient_accumulation_steps: 1
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"
@@ -104,10 +89,10 @@ adam_betas: "(0.9, 0.98)"
 #max_grad_norm: 0.0
 total_dataset_len: -1
 max_grad_norm: 1.0
-num_train_epochs: 3
+num_train_epochs: 6
 max_steps: 0
-warmup_proportion: 0
-warmup_steps: 200
+warmup_proportion: 0.01
+warmup_steps: 0
 
 # Optimizer
 optimizer:
@@ -136,7 +121,7 @@ prediction_cfg:
 eval_forward_fn:
   _target_: general_util.evaluator.DefaultForwardFn
 post_process:
-  _target_: post_processors.dpo.DPOEvalPostProcessor
+  _target_: post_processors.dist_mixin.SFTLossOnlyPostProcessor
 
 ds_cfg:
   train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
@@ -153,10 +138,7 @@ ds_cfg:
 summary_helper:
   _target_: general_util.tensorboard_helper.WandbWriter
   batch_index_or_keys:
-  #    "train/pair_value_num": pair_value_num
   outputs_index_or_keys:
-    "train/chosen_reward": chosen_reward
-    "train/rejected_reward": rejected_reward
 
 # Temporary variables
 n_gpu:

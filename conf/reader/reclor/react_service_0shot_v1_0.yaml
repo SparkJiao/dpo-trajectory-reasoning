@@ -1,0 +1,13 @@
+_target_: data.logiqav2.ComposePromptGenerator
+read_func:
+  _target_: data.reclor.ReClorReader
+  flat_options: True
+template_id: 8
+instruction:
+  _target_: data.prompts.logiqav2.react.prompts.get_prompt
+  prompt_name: react_v2
+few_shot_prompt:
+compose_keys: [ "context", "question", "option_list" ]
+max_data_num: -1
+api_based: False
+service_based: False

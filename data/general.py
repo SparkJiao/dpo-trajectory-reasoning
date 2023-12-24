@@ -439,6 +439,7 @@ def extract_react_ending_positions(tokenizer: PreTrainedTokenizer, response: str
 
     assert resp_start, response
     assert len(endings) > 0, (response, steps)
+    assert len(endings) == len(process_response(response[response.find("Thought 1:"):])), (response, steps)
     return endings
 
 
@@ -474,12 +475,18 @@ class CompleteTrajStepRewardCollator:
         labels[prompt_mask] = self.tokenizer.pad_token_id
 
         endings = []
+        padding_len = torch.sum(1 - encoded_inputs["attention_mask"], dim=-1)
         for b, item in enumerate(batch):
             ending = extract_react_ending_positions(self.tokenizer, item["input"], self.max_seq_length)
             if self.tokenizer.padding_side == "left":
-                padding_len = torch.sum(1 - encoded_inputs["attention_mask"], dim=-1)
                 ending = [e + padding_len[b].item() for e in ending]
             endings.append(ending)
+            # tmp = process_response("Thought 1:" + item["input"].split("Thought 1:")[1])
+            # tmp2 = process_response("Thought 1: " + item["response"])
+            # assert len(ending) == len(tmp), (item["input"], ending)
+            # print("A", len(ending))
+            # print("B", len(tmp))
+            # print("C", len(tmp2))
 
         encoded_inputs["labels"] = labels
         encoded_inputs["meta_data"] = {

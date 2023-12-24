@@ -219,6 +219,12 @@ class ResponseClsPostProcessor(DistGatherMixin):
         return metrics, self.predictions
 
 
+def process_response(response: str):
+    lines = response.split("\n")
+    lines = list(filter(lambda x: x[1].startswith("Thought ") or x[1].startswith("Action ") or x[1].startswith("Observation "), enumerate(lines)))
+    return lines
+
+
 class ResponseProcessRewardPostProcessor(DistGatherMixin):
     def __init__(self, reduction: str = "product"):
         """
@@ -242,7 +248,12 @@ class ResponseProcessRewardPostProcessor(DistGatherMixin):
         responses = meta_data["response"]
         ending_positions = meta_data["ending"]
 
+        # print(batch_model_outputs["logits"].shape)
         logits = batch_model_outputs["logits"].tolist()
+
+        for i, endings in enumerate(ending_positions):
+            tmp = len(process_response("Thought 1: " + responses[i]))
+            assert len(endings) == tmp, (len(endings), tmp, endings, responses[i])
 
         ending_logits = []
         assert len(ending_positions) == len(logits)

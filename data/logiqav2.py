@@ -78,9 +78,9 @@ class LogicQAReader:
         ]
 
 
-class SubResponseMergeReader(LogicQAReader):
-    def __init__(self, inter_states_file: str, flat_options: bool = False):
-        super().__init__(flat_options)
+class SubResponseMergeReader:
+    def __init__(self, inter_states_file: str, original_reader: Callable = LogicQAReader(flat_options=True)):
+        self.original_reader = original_reader
         self.inter_states = json.load(open(inter_states_file, "r"))
 
     def __call__(self, file):
@@ -88,7 +88,7 @@ class SubResponseMergeReader(LogicQAReader):
         :param file: The original data of LogiQA-v2.
         :return:
         """
-        original_data = super().__call__(file)
+        original_data = self.original_reader(file)
         id2original_data = {idx: item for idx, item in enumerate(original_data)}
 
         outputs = []
@@ -118,7 +118,7 @@ class ComposePromptGenerator(Dataset):
                  service_based: bool = False, service_processor: Callable = None,
                  flush_file: str = None,
                  split_size: int = -1,
-                 split_id: int = 0,):
+                 split_id: int = 0, ):
         self.instruction = instruction
         self.few_shot_prompt = few_shot_prompt
         self.compose_keys = compose_keys
@@ -145,8 +145,8 @@ class ComposePromptGenerator(Dataset):
         template = templates[template_id] if isinstance(template_id, int) else template_id
         for i in range(len(self.input_data)):
             idx = self.input_data[i]["id"] if "id" in self.input_data[i] else i
-            if idx in flushed_data:
-                continue
+            # if idx in flushed_data:
+            #     continue
 
             _input = ""
             if self.instruction:
@@ -179,6 +179,17 @@ class ComposePromptGenerator(Dataset):
             self.inputs = self.inputs[self.split_id::self.split_size]
             self.indices = self.indices[self.split_id::self.split_size]
             self.labels = self.labels[self.split_id::self.split_size]
+
+        inputs, indices, labels = [], [], []
+        for i in range(len(self.inputs)):
+            if self.indices[i] in flushed_data:
+                continue
+            inputs.append(self.inputs[i])
+            indices.append(self.indices[i])
+            labels.append(self.labels[i])
+        self.inputs = inputs
+        self.indices = indices
+        self.labels = labels
 
     def __len__(self):
         if self.max_data_num > 0:
