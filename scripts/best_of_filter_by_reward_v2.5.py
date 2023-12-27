@@ -12,7 +12,9 @@ Updated from Ver.1.2
 
 Ver.2.2:
     - Recompute the reward by only use the probability of `label==3`.
-    - Add label positions.
+    
+Ver.2.4:
+    - Add full-connection pairs with specified margin.
 
 """
 
@@ -35,7 +37,7 @@ def parse_leaf_node_value(response: str, label: int):
             return 0
 
 
-def best_of_n_filter(item, best_of: int, response2reward: Dict[str, float]):
+def best_of_n_filter(item, response2reward: Dict[str, float]):
     incorrect_responses = []
     responses = []
     for resp_id, resp in enumerate(item["response"]):
@@ -50,37 +52,12 @@ def best_of_n_filter(item, best_of: int, response2reward: Dict[str, float]):
     correct_num = len(responses)
 
     responses = sorted(responses, key=lambda x: x[1], reverse=True)
-    chosen_responses = responses[:best_of]
     reject_responses = incorrect_responses
-    chosen_responses = sorted(chosen_responses, key=lambda x: x[0])
     reject_responses = sorted(reject_responses, key=lambda x: x[1], reverse=True)
-    chosen_responses = [item["response"][resp_id] for resp_id, _ in chosen_responses]
-    reject_responses = [item["response"][resp_id] for resp_id, _ in reject_responses]
 
-    return chosen_responses, responses, reject_responses, correct_num
+    return responses, reject_responses, correct_num
 
 
-def best_of_n_filter_inter_states(item, best_of: int, response2reward: Dict[str, float]):
-    responses = []
-    for state_id, state in enumerate(item["inter_states"]):
-        resp = state["state"]
-        if resp not in response2reward:
-            continue
-        responses.append((state_id, response2reward[resp]))
-
-    responses = sorted(responses, key=lambda x: x[1], reverse=True)
-    chosen_responses = responses[:best_of]
-    reject_responses = responses[best_of:]
-    chosen_responses = sorted(chosen_responses, key=lambda x: x[0])
-    reject_responses = sorted(reject_responses, key=lambda x: x[0])
-    chosen_responses = [item["inter_states"][state_id]["state"] for state_id, _ in chosen_responses]
-    reject_responses = [item["inter_states"][state_id]["state"] for state_id, _ in reject_responses]
-    return chosen_responses, reject_responses
-
-
-# def logit2prob(logits):
-#     probs = torch.softmax(logits, dim=-1)
-#     return probs[:, 3]
 def logit2prob(logits, prob_labels=(3,)):
     probs = torch.softmax(logits, dim=-1)
     # Sum the probabilities along the `prob_labels`.
@@ -92,16 +69,12 @@ def main():
     parser.add_argument("--input_file", type=str)
     parser.add_argument("--reward_file", type=str)
     parser.add_argument("--output_file", type=str)
-    parser.add_argument("--best_of", type=int, default=1)
-    parser.add_argument("--max_neg_num", type=int, default=100)
-    parser.add_argument("--pos_margin", type=float, default=2.0)
+    parser.add_argument("--margin", type=float, default=0.5)
     parser.add_argument("--reduction", type=str, default="product", choices=["product", "min"])
     parser.add_argument("--prob_labels", type=str, default="(3,)", help="The labels to compute the probability.")
     args = parser.parse_args()
 
     args.prob_labels = eval(args.prob_labels)
-    print(args.prob_labels)
-    print(args.reduction)
 
     if os.path.exists(args.input_file):
         files = [args.input_file]
@@ -127,10 +100,6 @@ def main():
             response2reward[item["response"]] = probs.prod().item()
         elif args.reduction == "min":
             response2reward[item["response"]] = probs.min().item()
-        elif args.reduction == "sum":
-            response2reward[item["response"]] = probs.sum().item()
-        elif args.reduction == "last":
-            response2reward[item["response"]] = probs[-1].item()
         else:
             raise ValueError(f"Unsupported reduction: {args.reduction}")
 
@@ -138,32 +107,47 @@ def main():
     print("duplicate responses", cnt)
 
     filtered = []
-    reduced = 0
     pos_pair = 0
+    neg_pair = 0
     for item in data:
-        chosen_responses, pos_response_rewards, reject_responses, correct_num = best_of_n_filter(item, args.best_of, response2reward)
-        for chosen in chosen_responses:
-            for reject in reject_responses[:args.max_neg_num]:
+        chosen_responses, reject_responses, correct_num = best_of_n_filter(item, response2reward)
+        for chosen_id, chosen_reward in chosen_responses:
+            for reject_id, reject_reward in reject_responses:
                 filtered.append({
-                    "chosen": chosen,
-                    "reject": reject,
+                    "chosen": item["response"][chosen_id],
+                    "reject": item["response"][reject_id],
                     "id": item["id"],
-                    "is_full": True,
+                    "is_full": False,
                 })
-            for pos_id, pos_reward in pos_response_rewards:
-                if response2reward[chosen] - pos_reward > args.pos_margin:
+
+        for chosen_id_x, chosen_reward_x in chosen_responses:
+            for chosen_id_y, chosen_reward_y in chosen_responses:
+                if chosen_id_x == chosen_id_y:
+                    continue
+                if chosen_reward_x - chosen_reward_y > args.margin:
                     filtered.append({
-                        "chosen": chosen,
-                        "reject": item["response"][pos_id],
+                        "chosen": item["response"][chosen_id_x],
+                        "reject": item["response"][chosen_id_y],
                         "id": item["id"],
-                        "is_full": True,
+                        "is_full": False,
                     })
                     pos_pair += 1
-        if correct_num < args.best_of:
-            reduced += 1
 
-    print("Reduced", reduced)
+        for reject_id_x, reject_reward_x in reject_responses:
+            for reject_id_y, reject_reward_y in reject_responses:
+                if reject_id_x == reject_id_y:
+                    continue
+                if reject_reward_x - reject_reward_y > args.margin:
+                    filtered.append({
+                        "chosen": item["response"][reject_id_x],
+                        "reject": item["response"][reject_id_y],
+                        "id": item["id"],
+                        "is_full": False,
+                    })
+                    neg_pair += 1
+
     print("Positive pairs", pos_pair)
+    print("Negative pairs", neg_pair)
     print(f"Candidates: {len(data)}")
     print("Collected amount of samples with rewards", len(filtered))
     print(f"Save to {args.output_file}")

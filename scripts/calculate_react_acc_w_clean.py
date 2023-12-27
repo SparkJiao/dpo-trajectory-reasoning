@@ -13,14 +13,12 @@ data = json.load(open(args.input_file, "r"))
 cnt = 0
 tmp = 0
 warning = 0
+hacked = 0
+hacked_responses = []
 for item in data:
     response = item["response"]
     if "Finish[" in response:
         tmp += 1
-        # if args.debug and tmp < 10:
-        #     print(response)
-        #     print("Label: ", item["label"])
-        #     print("=========================")
         groups = response.split("Finish[")
         if len(groups) > 2:
             print(response)
@@ -32,6 +30,11 @@ for item in data:
     preds = re.findall(r"A|B|C|D", response)
     if len(preds) == 0:
         pred = ""
+    elif len(preds) > 1:
+        pred = ""
+        hacked += 1
+        if "The answer is" in response:
+            hacked_responses.append(response)
     else:
         pred = preds[0]
 
@@ -39,3 +42,7 @@ for item in data:
         cnt += 1
 
 print(cnt / len(data))
+print("Finished: ", tmp)
+print("Hacked answer: ", hacked)
+print(len(data))
+print(json.dumps(hacked_responses[:50], indent=2))

@@ -1,9 +1,17 @@
 import argparse
+import collections
 import json
 import os
 import re
 from glob import glob
 from typing import Dict
+import torch
+
+
+def logit2prob(logits, prob_labels=(3,)):
+    probs = torch.softmax(logits, dim=-1)
+    # Sum the probabilities along the `prob_labels`.
+    return probs[:, prob_labels].sum(dim=-1)
 
 
 def parse_leaf_node_value(response: str, label: int):
@@ -22,6 +30,21 @@ def parse_leaf_node_value(response: str, label: int):
             return 1
         else:
             return 0
+
+
+def parse_prediction(response: str):
+    groups = response.split("Finish")
+    if len(groups) < 2:
+        # print(f"Warning: Not a valid response: {response}")
+        return None
+    response = groups[1]
+    preds = re.findall(r"A|B|C|D", response)
+    if len(preds) == 0:
+        return None
+    elif len(preds) > 1:
+        return None
+    else:
+        return ord(preds[0]) - ord("A")
 
 
 def best_of_n_filter(item, best_of: int, response2reward: Dict[str, float]):
@@ -71,7 +94,13 @@ def main():
     parser.add_argument("--input_file", type=str)
     parser.add_argument("--reward_file", type=str)
     parser.add_argument("--output_file", type=str)
+    parser.add_argument("--reduction", type=str, default="product")
+    parser.add_argument("--prob_labels", type=str, default="(3,)", help="The labels to compute the probability.")
     args = parser.parse_args()
+    print(args.reduction)
+    print(args.prob_labels)
+
+    args.prob_labels = eval(args.prob_labels)
 
     if os.path.exists(args.input_file):
         files = [args.input_file]
@@ -89,19 +118,35 @@ def main():
         if item["response"] in response2reward:
             duplicates.add(item["response"])
             cnt += 1
-        if isinstance(item["reward"], list):
-            assert len(item["reward"]) == 1
-            response2reward[item["response"]] = item["reward"][0]
-        elif isinstance(item["reward"], float):
-            response2reward[item["response"]] = item["reward"]
+        # if isinstance(item["reward"], list):
+        #     assert len(item["reward"]) == 1
+        #     response2reward[item["response"]] = item["reward"][0]
+        # elif isinstance(item["reward"], float):
+        #     response2reward[item["response"]] = item["reward"]
+        # else:
+        #     raise ValueError(f"Unsupported type of reward: {item['reward'].__class__}")
+        logits = torch.tensor(item["ending_logits"])
+        probs = logit2prob(logits, prob_labels=args.prob_labels)
+        if args.reduction == "product":
+            response2reward[item["response"]] = probs.prod().item()
+        elif args.reduction == "sum":
+            response2reward[item["response"]] = probs.sum().item()
+        elif args.reduction == "last":
+            response2reward[item["response"]] = probs[-1].item()
+        elif args.reduction == "min":
+            response2reward[item["response"]] = probs.min().item()
         else:
-            raise ValueError(f"Unsupported type of reward: {item['reward'].__class__}")
+            raise ValueError(f"Unsupported reduction: {args.reduction}")
 
     print("collected rewards", len(response2reward))
     print("duplicate responses", cnt)
 
+    sc_correct = 0
+    rm_correct = 0
     for item in data:
         cleaned_responses = []
+        preds = collections.Counter()
+        rewards = []
         for resp_id, resp in enumerate(item["response"]):
             if resp not in response2reward:
                 continue
@@ -118,9 +163,23 @@ def main():
                     "reward": response2reward[resp],
                     "is_correct": True,
                 })
+
+            pred = parse_prediction(resp)
+            if pred is not None:
+                preds[pred] += 1
+                rewards.append((pred, response2reward[resp]))
         item["response_reward"] = cleaned_responses
 
+        if len(preds) > 0:
+            sc_correct += int(preds.most_common(1)[0][0] == item["label"])
+
+        if len(rewards) > 0:
+            rewards = sorted(rewards, key=lambda x: x[1], reverse=True)
+            rm_correct += int(rewards[0][0] == item["label"])
+
     json.dump(data, open(args.output_file, "w"), indent=2)
+    print("sc acc", sc_correct / len(data))
+    print("rm acc", rm_correct / len(data))
 
 
 if __name__ == '__main__':

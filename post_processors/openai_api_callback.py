@@ -58,7 +58,10 @@ class ReActSeparatorClean:
             preds = re.findall(self.regrex, pred)
             if len(preds) == 0:
                 return ""
-            return preds[0]
+            elif len(preds) == 1:
+                return preds[0]
+            else:
+                return ""  # FIXED@2023-12-27: To avoid the case where the large language models tends to generate multiple predictions to hack the answer.
 
         preds = re.findall(self.regrex, pred)
         if len(preds) == 0:
