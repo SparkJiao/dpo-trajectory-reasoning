@@ -1,0 +1,162 @@
+defaults:
+  - hydra: default
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero1
+  - deepspeed@ds_cfg: train_hybrid_engine_zero2_optim_offload
+  - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
+
+hydra:
+  searchpath:
+    - file://conf/
+
+sft_model_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/
+fix_hack_data_dir: ${sft_model_dir}/fix_hack_data_dir/
+train_file: ${fix_hack_data_dir}/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_dpo_pair.sub_train.json  # 132458
+dev_file: ${fix_hack_data_dir}/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_dpo_pair.sub_dev.json  # 1000
+test_file:
+
+torch_dtype:
+  _target_: general_util.training_utils.return_torch_dtype
+  dtype: bfloat16
+
+tokenizer_init:
+  _target_: general_util.tokenization_utils.init_tokenizer
+  tokenizer_path: ${model_name_or_path}
+  padding_side: left
+
+device_map:
+  _target_: models.llama.return_single_device_map
+
+model:
+  _target_: models.llama.LlamaForCausalLMDPO.from_pretrained_with_ref_model
+  beta: 0.1
+  gradient_checkpointing: True
+  pad_token_id: 0
+  use_flash_attention_2: True
+  torch_dtype: ${torch_dtype}
+  device_map: ${device_map}
+  ref_model:
+    _target_: transformers.models.llama.LlamaForCausalLM.from_pretrained
+    pretrained_model_name_or_path: ${model_name_or_path}
+    torch_dtype: ${torch_dtype}
+    use_flash_attention_2: True
+    pad_token_id: 0
+    device_map: ${device_map}
+    load_in_8bit: True
+
+
+# Data loading
+read_tensor:
+  _target_: data.dpo.DPOMergeDataset
+  original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+  original_reader:
+    _target_: data.logiqav2.LogicQAReader
+    flat_options: True
+  instruction:
+    _target_: data.prompts.logiqav2.react.prompts.get_prompt
+    prompt_name: react_v2
+  template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\n"
+  compose_keys: [ "context", "question", "option_list" ]
+  format_filter:
+    _target_: data.dpo.ReActFormat
+
+
+dist_load_data_barrier: False
+
+extended_vocab:
+
+# Data collator
+collator:
+  _target_: data.dpo.DPOCollator
+  tokenizer: ${tokenizer_init}
+  max_seq_length: 2048
+
+# Dataloader
+num_workers: 8
+prefetch_factor: 2
+
+# Wiki path pretrain v8.2
+model_name_or_path: ${sft_model_dir}
+pretrain:
+
+exp_name: llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.A100.40.w8.v1.1.s${seed}
+exp_notes:
+output_dir: experiments/${exp_name}
+
+
+do_train: True
+evaluate_during_training: True
+
+do_eval: False
+eval_sub_path: checkpoint-100
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1  # H100
+per_gpu_eval_batch_size: 4
+learning_rate: 1e-6
+gradient_accumulation_steps: 8
+weight_decay: 0.01
+adam_epsilon: 1e-6
+adam_betas: "(0.9, 0.98)"
+total_dataset_len: -1
+max_grad_norm: 1.0
+num_train_epochs: 2
+max_steps: 0
+warmup_proportion: 0
+warmup_steps: 200
+
+# Optimizer
+optimizer:
+use_nvlamb:
+bit_training:
+
+logging_steps: 5
+save_ds_state: False
+save_steps: 400
+save_best: False
+eval_steps: 400
+ddp_eval: True
+no_cuda: False
+seed: 42
+local_rank: -1
+fp16: True
+fp16_opt_level: O1
+fp16_bfloat16: True
+
+# Prediction config
+prediction_cfg:
+  metric: "loss"
+  measure: -1
+  best_checkpoint:
+  best_result:
+eval_forward_fn:
+  _target_: general_util.evaluator.DefaultForwardFn
+post_process:
+  _target_: post_processors.dpo.DPOEvalPostProcessor
+
+ds_cfg:
+  train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
+  gradient_accumulation_steps: ${gradient_accumulation_steps}
+  optimizer:
+    type: AdamW
+    params:
+      lr: ${learning_rate}
+      betas: [ 0.9, 0.95 ]
+      weight_decay: ${weight_decay}
+
+
+
+summary_helper:
+  _target_: general_util.tensorboard_helper.WandbWriter
+  batch_index_or_keys:
+  #    "train/pair_value_num": pair_value_num
+  outputs_index_or_keys:
+    "train/chosen_reward": chosen_reward
+    "train/rejected_reward": rejected_reward
+
+# Temporary variables
+n_gpu:
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

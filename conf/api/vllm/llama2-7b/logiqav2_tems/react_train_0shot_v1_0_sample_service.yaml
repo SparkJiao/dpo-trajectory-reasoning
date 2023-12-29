@@ -37,7 +37,7 @@ read_tensor:
     temperature: 1.0
   flush_file: ${flush_file}
 
-output_file: ${output_dir}/logiqav2.react.train.0shot.sample10.v1.0.json
+output_file: ${output_dir}/logiqav2.react.train.0shot.sample${read_tensor.service_processor.n}.v1.0.json
 flush_file: ${output_file}l
 
 # Dataloader

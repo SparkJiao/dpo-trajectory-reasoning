@@ -136,7 +136,7 @@ def main(cfg: DictConfig):
     logger.warning(f"CPU cores: {os.cpu_count()}")
 
     # Set seed
-    set_seed(cfg)
+    # set_seed(cfg)
 
     # Test
     results = {}

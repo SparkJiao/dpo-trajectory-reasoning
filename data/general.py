@@ -77,19 +77,34 @@ def clean_react_response(response: str):
     return response
 
 
-def parse_leaf_node_value(response: str, label: int):
+def parse_leaf_node_value(response: str, label: int, logs: dict):
     groups = response.split("Finish")
     if len(groups) < 2:
         # print(f"Warning: Not a valid response: {response}")
+        if "invalid" not in logs:
+            logs["invalid"] = 0
+        logs["invalid"] += 1
         return 0
     response = groups[1]
     preds = re.findall(r"A|B|C|D", response)
     if len(preds) == 0:
+        if "missing" not in logs:
+            logs["missing"] = 0
+        logs["missing"] += 1
+        return 0
+    elif len(preds) > 1:
+        if "multiple" not in logs:
+            logs["multiple"] = 0
+        logs["multiple"] += 1
+        # print(f"Warning: Multiple answers: {response}")  # Fixed: Here is fixed.
         return 0
     else:
         if ord(preds[0]) - ord("A") == label:
             return 1
         else:
+            if "wrong" not in logs:
+                logs["wrong"] = 0
+            logs["wrong"] += 1
             return 0
 
 
@@ -131,6 +146,14 @@ def extract_react_correct_response(data: List[Dict[str, Any]]) -> List[Dict[str,
     return correct
 
 
+"""
+Fixed: @2023-12-27
+
+Add the ReAct parsing results function here to avoid the influence from previous unchanged post-processing code,
+which did not filter out the solutions hacking the problem by predicting multiple answers.
+"""
+
+
 class PartialTrajAttemptsReader:
     def __init__(self, partial_traj_file: str):
         self.partial_traj_file = partial_traj_file
@@ -142,6 +165,7 @@ class PartialTrajAttemptsReader:
             files = glob(attempt_response_file)
 
         state_id2values = collections.defaultdict(dict)
+        logs = {}
         for file in files:
             data = json.load(open(file, "r"))
 
@@ -156,8 +180,10 @@ class PartialTrajAttemptsReader:
                         break
                     if p == "":
                         continue
-                    if ord(p.strip()) - ord("A") == item["label"]:
-                        v += 1
+                    # if ord(p.strip()) - ord("A") == item["label"]:
+                    #     v += 1
+                    v += parse_leaf_node_value(res, item["label"], logs=logs)
+
                 if not flag:
                     continue
                 state_id2values[int(idx)][int(state_id)] = (v, item["text"].split("Thought 1:")[1].strip())
@@ -172,6 +198,7 @@ class PartialTrajAttemptsReader:
         for state_file in inter_state_files:
             inter_states.extend(json.load(open(state_file, "r")))
 
+        logger.info(f"Parsing inter states attempts logs: {logs}")
         logger.info(f"Loaded {len(inter_states)} inter states from {len(inter_state_files)} files.")
 
         jumped = 0
@@ -241,8 +268,8 @@ class WorsenInterStateMergeReader:
 
 class Attempt2ValueRewardModelingDataset(ComposeDatasetMixin):
     def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
-                 original_data_file: str, original_reader: Callable, template: str, reader: Callable,
-                 instruction: str = "", few_shot_prompts: str = "", max_value: int = 3,
+                 original_data_file: str, original_reader: Callable, template: str, reader: Callable, max_value: int,
+                 instruction: str = "", few_shot_prompts: str = "",
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  format_filter: Optional[Callable] = None,
                  re_index: bool = False, ):
@@ -258,6 +285,7 @@ class Attempt2ValueRewardModelingDataset(ComposeDatasetMixin):
         original_data = original_reader(original_data_file)
         data = []
         abandoned = []
+        logs = {}
         for i, item in enumerate(original_data):
             if "index" in item:
                 item_id = item["index"]
@@ -279,7 +307,7 @@ class Attempt2ValueRewardModelingDataset(ComposeDatasetMixin):
                             new_item["index"] = item_id if not re_index else len(data)
                             data.append(new_item)
                     for full_response in inter_item["response"]:
-                        value = parse_leaf_node_value(full_response, item["label"]) * max_value
+                        value = parse_leaf_node_value(full_response, item["label"], logs) * max_value
                         new_item = copy.deepcopy(item)
                         new_item["response"] = full_response
                         new_item["value"] = value

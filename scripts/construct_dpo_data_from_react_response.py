@@ -6,6 +6,8 @@ from glob import glob
 
 
 # Copied from scripts.process_react_nodes.py
+# Update 2023/12/27: Remove the falsehood solutions with predicting multiple answers, e.g., Finish[The answer is A and B].
+#   This would lead to the model prefer to hack problem.
 def clean_react_response(response: str):
     if "Context:\n" in response:
         response = response.split("Context:\n")[0]
@@ -26,19 +28,26 @@ def clean_react_response(response: str):
     return response
 
 
-def parse_leaf_node_value(response: str, label: int):
+def parse_leaf_node_value(response: str, label: int, logs: dict):
     groups = response.split("Finish")
     if len(groups) < 2:
         # print(f"Warning: Not a valid response: {response}")
+        logs["invalid"] += 1
         return 0
     response = groups[1]
     preds = re.findall(r"A|B|C|D", response)
     if len(preds) == 0:
+        logs["missing"] += 1
+        return 0
+    elif len(preds) > 1:
+        logs["multiple"] += 1
+        # print(f"Warning: Multiple answers: {response}")  # Fixed: Here is fixed.
         return 0
     else:
         if ord(preds[0]) - ord("A") == label:
             return 1
         else:
+            logs["wrong"] += 1
             return 0
 
 
@@ -84,11 +93,17 @@ def main():
 
     outputs = []
     all_chosen_data = []
+    logs = {
+        "invalid": 0,
+        "missing": 0,
+        "multiple": 0,
+        "wrong": 0,
+    }
     for item in cleaned_data:
         chosen = []
         reject = []
         for response in item["response"]:
-            v = parse_leaf_node_value(response, item["label"])
+            v = parse_leaf_node_value(response, item["label"], logs=logs)
             if v == 0:
                 reject.append(response)
             else:
@@ -112,7 +127,11 @@ def main():
 
     print(len(all_chosen_data))
     print(len(outputs))
+    print(logs)
 
+    save_dir = os.path.dirname(args.output_file)
+    cleaned_data_save_path = os.path.join(save_dir, args.input_file.split("/")[-1].replace(".json", ".cleaned.json"))
+    json.dump(cleaned_data, open(cleaned_data_save_path, "w"), indent=2, ensure_ascii=False)
     json.dump(outputs, open(args.output_file, "w"), indent=2, ensure_ascii=False)
     json.dump(all_chosen_data, open(args.output_file.replace(".json", ".chosen.json"), "w"), indent=2, ensure_ascii=False)
 

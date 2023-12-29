@@ -6,6 +6,11 @@ from typing import Dict, Any, List, Tuple
 import numpy as np
 import vllm
 
+from general_util.logger import get_child_logger
+
+
+logger = get_child_logger(__name__)
+
 
 class MCQAAnswerClean:
     def __init__(self, prompt: str = "zero-shot"):
@@ -86,24 +91,26 @@ class BinaryAnswerClean:
 
 
 class OpenAICallBack:
-    def __init__(self, output_file: str, answer_clean: MCQAAnswerClean):
+    def __init__(self, output_file: str, answer_clean: MCQAAnswerClean, resume: bool = False):
         self.predictions = []
         self.output_file = output_file
         self.answer_clean = answer_clean
 
         logging_file = output_file.replace(".json", ".jsonl")
         if os.path.exists(logging_file):
-            with open(logging_file, "r") as f:
-                for line in f.readlines():
-                    # self.predictions.append(json.loads(line))
-                    item = json.loads(line)
-                    if isinstance(item["response"], str):
-                        if item["response"].strip() == "":
-                            continue
-                    elif isinstance(item["response"], list):
-                        if any([tmp.strip() == "" for tmp in item["response"]]):
-                            continue
-                    self.predictions.append(item)
+            if resume:
+                with open(logging_file, "r") as f:
+                    for line in f.readlines():
+                        # self.predictions.append(json.loads(line))
+                        item = json.loads(line)
+                        if isinstance(item["response"], str):
+                            if item["response"].strip() == "":
+                                continue
+                        elif isinstance(item["response"], list):
+                            if any([tmp.strip() == "" for tmp in item["response"]]):
+                                continue
+                        self.predictions.append(item)
+                logger.info(f"Load {len(self.predictions)} from {logging_file}")
             self.fw = open(logging_file, "a")
         else:
             self.fw = open(logging_file, "w")
@@ -162,10 +169,10 @@ class OpenAICallBack:
             pred = collections.Counter(preds).most_common(1)[0][0]
 
             if not pred.strip():
-                outputs.append(0)
+                outputs.append((item["id"], 0))
                 continue
             if len(pred.strip()) > 1:
-                outputs.append(0)
+                outputs.append((item["id"], 0))
                 continue
             if isinstance(item["label"], str):
                 if item["label"].strip() == pred.strip():
@@ -176,12 +183,22 @@ class OpenAICallBack:
             else:
                 if item["label"] == ord(pred.strip()) - ord("A"):
                     cnt += 1
-            outputs.append(ord(pred.strip()) - ord("A"))
+            outputs.append((item["id"], ord(pred.strip()) - ord("A")))
         assert len(outputs) == len(self.predictions)
+
+        # Remove duplicated ids to satisfy the submission requirements of ReClor.
+        outputs = sorted(outputs, key=lambda x: x[0])
+        id_set = set()
+        new_outputs = []
+        for item in outputs:
+            if item[0] not in id_set:
+                new_outputs.append(item[1])
+                id_set.add(item[0])
+        outputs = new_outputs
 
         np_output_file = self.output_file.replace(".json", ".npy")
         np.save(np_output_file, np.array(outputs))
 
-        metrics = {"acc": cnt / len(self.predictions)}
+        metrics = {"acc": cnt / len(self.predictions), "correct": cnt, "total": len(self.predictions)}
         json.dump(metrics, open(self.output_file.replace(".json", ".metrics.json"), "w"), indent=2)
         return {"acc": cnt / len(self.predictions)}, []
