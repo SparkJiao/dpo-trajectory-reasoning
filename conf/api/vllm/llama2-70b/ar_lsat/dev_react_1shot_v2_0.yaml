@@ -10,12 +10,13 @@ hydra:
 
 train_file: ../research.data/AR-LSAT/data/AR_TrainingData.json
 dev_file: ../research.data/AR-LSAT/data/AR_DevelopmentData.json
-test_file: ../research.data/AR-LSAT/data/AR_TestData.json
+#test_file: ../research.data/AR-LSAT/data/AR_TestData.json
+test_file: ../research.data/AR-LSAT/data/AR_DevelopmentData.json
 
 port: 6000
-model: llama-2-70b-chat
+model: mixtral-ins
 
-output_file: ../pretrained-models/Llama-2-70b-chat-hf/ar-lsat.react.dev.1shot.v2.0.json
+output_file: ../pretrained-models/Mixtral-8x7B-Instruct-v0.1/ar-lsat.react.dev.1shot.v2.0.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -26,6 +27,11 @@ read_tensor:
   few_shot_prompt:
     _target_: data.logiqav2.read_single_file
     file_path: data/prompts/ar_lsat/react/train_200006_1-G_1_1.txt
+  service_processor:
+    _target_: data.vllm.VLLMRequestGenerator
+    api_url: http://0.0.0.0:6000/v1/completions
+    max_tokens: 8192
+    stop: [ "</s>", "\n\n\n\n", "Context:\n", "Thought 42:" ]
 
 # Dataloader
 num_workers: 32

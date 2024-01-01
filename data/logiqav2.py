@@ -176,9 +176,13 @@ class ComposePromptGenerator(Dataset):
         self.split_id = split_id
         if self.split_size > 0:
             assert self.split_id < self.split_size
-            self.inputs = self.inputs[self.split_id::self.split_size]
-            self.indices = self.indices[self.split_id::self.split_size]
-            self.labels = self.labels[self.split_id::self.split_size]
+            # self.inputs = self.inputs[self.split_id::self.split_size]
+            # self.indices = self.indices[self.split_id::self.split_size]
+            # self.labels = self.labels[self.split_id::self.split_size]
+            batch_size = (len(self.inputs) + self.split_size - 1) // self.split_size
+            self.inputs = self.inputs[self.split_id * batch_size:(self.split_id + 1) * batch_size]
+            self.indices = self.indices[self.split_id * batch_size:(self.split_id + 1) * batch_size]
+            self.labels = self.labels[self.split_id * batch_size:(self.split_id + 1) * batch_size]
 
         inputs, indices, labels = [], [], []
         for i in range(len(self.inputs)):

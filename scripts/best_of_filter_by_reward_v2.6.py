@@ -97,7 +97,6 @@ def main():
     parser.add_argument("--pos_margin", type=float, default=2.0)
     parser.add_argument("--reduction", type=str, default="product", choices=["product", "min"])
     parser.add_argument("--prob_labels", type=str, default="(3,)", help="The labels to compute the probability.")
-    parser.add_argument("--up_sampling", type=int, default=1)
     args = parser.parse_args()
 
     args.prob_labels = eval(args.prob_labels)
@@ -139,7 +138,6 @@ def main():
     print("duplicate responses", cnt)
 
     filtered = []
-    pos2pos = []
     reduced = 0
     pos_pair = 0
     for item in data:
@@ -152,9 +150,13 @@ def main():
                     "id": item["id"],
                     "is_full": True,
                 })
+
+        # We put out the positive-pairs to enable full-connection
+        for chosen_id, chosen_reward in pos_response_rewards:
+            chosen = item["response"][chosen_id]
             for pos_id, pos_reward in pos_response_rewards:
                 if response2reward[chosen] - pos_reward > args.pos_margin:
-                    pos2pos.append({
+                    filtered.append({
                         "chosen": chosen,
                         "reject": item["response"][pos_id],
                         "id": item["id"],
@@ -164,13 +166,8 @@ def main():
         if correct_num < args.best_of:
             reduced += 1
 
-    print("Positive pairs", len(pos2pos))
-    pos2pos = pos2pos * args.up_sampling
-    filtered += pos2pos
-
     print("Reduced", reduced)
-    # print("Positive pairs", pos_pair)
-    print("Positive pairs by up-sampling:", len(pos2pos))
+    print("Positive pairs", pos_pair)
     print(f"Candidates: {len(data)}")
     print("Collected amount of samples with rewards", len(filtered))
     print(f"Save to {args.output_file}")

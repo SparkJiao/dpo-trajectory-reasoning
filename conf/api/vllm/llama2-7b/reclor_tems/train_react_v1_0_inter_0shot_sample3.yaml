@@ -21,8 +21,11 @@ output_dir: experiments/${exp_name}
 #data_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.dpo.H100.w4.v1.0/checkpoint-1600/react-inter-states
 data_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/react-inter-states/
 
+sample_num: 3
+
 #output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.0.rs0.4.r0.3.sample3.json
-output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.sample5.${read_tensor.split_id}-of-${read_tensor.split_size}.json
+#output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.sample5.${read_tensor.split_id}-of-${read_tensor.split_size}.json
+output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.sample${sample_num}.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -33,14 +36,16 @@ read_tensor:
     original_reader:
       _target_: data.reclor.ReClorReader
       flat_options: True
-    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json
+#    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json
+#    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_dev.json  # Fix @ 2023/12/29
+    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.json  # Fix @ 2023/12/29
   template_id: 9
   instruction:
     _target_: data.prompts.logiqav2.react.prompts.get_prompt
     prompt_name: react_v2
   compose_keys: [ "context", "question", "option_list", "response" ]
   max_data_num: -1
-  split_size: 10
+  split_size: -1
   split_id: 0
   api_based: False
   service_based: True
@@ -52,9 +57,12 @@ read_tensor:
     model: llama2-7b-reclor-distil
     stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
 #    n: 3
-    n: 5
+    n: ${sample_num}
     temperature: 1.0
   flush_file: ${flush_file}
+
+post_process:
+  resume: True
 
 # Dataloader
 num_workers: 32

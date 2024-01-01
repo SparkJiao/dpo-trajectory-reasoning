@@ -58,9 +58,9 @@ def best_of_n_filter(item, response2reward: Dict[str, float]):
     return responses, reject_responses, correct_num
 
 
-def logit2prob(logits):
+def logit2prob(logits, prob_labels=(3,)):
     probs = torch.softmax(logits, dim=-1)
-    return probs[:, 3]
+    return probs[:, prob_labels].sum(dim=-1)
 
 
 def main():
@@ -69,8 +69,11 @@ def main():
     parser.add_argument("--reward_file", type=str)
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--margin", type=float, default=0.5)
+    parser.add_argument("--prob_labels", type=str, default="(3,)", help="The labels to compute the probability.")
     parser.add_argument("--reduction", type=str, default="product", choices=["product", "min"])
     args = parser.parse_args()
+
+    args.prob_labels = eval(args.prob_labels)
 
     if os.path.exists(args.input_file):
         files = [args.input_file]
@@ -91,7 +94,7 @@ def main():
             cnt += 1
 
         logits = torch.tensor(item["ending_logits"])
-        probs = logit2prob(logits)
+        probs = logit2prob(logits, prob_labels=args.prob_labels)
         if args.reduction == "product":
             response2reward[item["response"]] = probs.prod().item()
         elif args.reduction == "min":
