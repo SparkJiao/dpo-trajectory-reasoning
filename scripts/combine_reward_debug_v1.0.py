@@ -95,6 +95,7 @@ def main():
     parser.add_argument("--reward_file", type=str)
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--reduction", type=str, default="product")
+    parser.add_argument("--remove_last", default=False, action="store_true")
     parser.add_argument("--prob_labels", type=str, default="(3,)", help="The labels to compute the probability.")
     args = parser.parse_args()
     print(args.reduction)
@@ -127,6 +128,8 @@ def main():
         #     raise ValueError(f"Unsupported type of reward: {item['reward'].__class__}")
         logits = torch.tensor(item["ending_logits"])
         probs = logit2prob(logits, prob_labels=args.prob_labels)
+        if args.remove_last:
+            probs = probs[:-1]
         if args.reduction == "product":
             response2reward[item["response"]] = probs.prod().item()
         elif args.reduction == "sum":

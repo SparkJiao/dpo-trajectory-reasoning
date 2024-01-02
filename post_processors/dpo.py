@@ -8,6 +8,9 @@ import torch
 from torch import distributed as dist
 
 from post_processors.dist_mixin import DistGatherMixin
+from general_util.logger import get_child_logger
+
+logger = get_child_logger(__name__)
 
 
 class DPOEvalPostProcessor(DistGatherMixin):
@@ -226,18 +229,20 @@ def process_response(response: str):
 
 
 class ResponseProcessRewardPostProcessor(DistGatherMixin):
-    def __init__(self, reduction: str = "product"):
+    def __init__(self, reduction: str = "product", prob_labels: str = "(2,3)"):
         """
         :param reduction: "product|min"
         """
         super().__init__()
         self.predictions = []
         self.reduction = reduction
+        self.prob_labels = eval(prob_labels)
+        logger.info(f"prob_labels: {self.prob_labels}")
 
-    @staticmethod
-    def logit2prob(logits):
+    def logit2prob(self, logits):
         probs = torch.softmax(logits, dim=-1)
-        probs = probs[:, 2] + probs[:, 3]
+        # probs = probs[:, 2] + probs[:, 3]
+        probs = probs[:, self.prob_labels].sum(dim=-1)
         return probs
 
     def __call__(self, meta_data: Dict[str, Any], batch_model_outputs: Dict[str, Any], ddp: bool = False):

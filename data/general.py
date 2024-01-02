@@ -266,13 +266,26 @@ class WorsenInterStateMergeReader:
         return outputs
 
 
+class Value2LabelMapping:
+    def __init__(self, name):
+        if name == "greater_then_one":
+            self.mapping = self.greater_then_one
+        else:
+            raise NotImplementedError
+
+    @staticmethod
+    def greater_then_one(value):
+        return 1 if value > 0 else 0
+
+
 class Attempt2ValueRewardModelingDataset(ComposeDatasetMixin):
     def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
                  original_data_file: str, original_reader: Callable, template: str, reader: Callable, max_value: int,
                  instruction: str = "", few_shot_prompts: str = "",
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  format_filter: Optional[Callable] = None,
-                 re_index: bool = False, ):
+                 re_index: bool = False,
+                 value_mapping: Optional[Value2LabelMapping] = None):
         super().__init__(template, instruction, few_shot_prompts, compose_keys)
 
         self.tokenizer = tokenizer
@@ -320,6 +333,7 @@ class Attempt2ValueRewardModelingDataset(ComposeDatasetMixin):
         self.instruction = instruction
         self.few_shot_prompts = few_shot_prompts
         self.compose_keys = compose_keys
+        self.value_mapping = value_mapping
 
         if format_filter:
             logger.info(f"Abandoned some of non-format examples:\n{len(abandoned)}")
@@ -331,11 +345,16 @@ class Attempt2ValueRewardModelingDataset(ComposeDatasetMixin):
         item = self.data[index]
         prompt, _input = self.compose_input(item, item["response"])
 
+        if self.value_mapping is not None:
+            value = self.value_mapping.mapping(item["value"])
+        else:
+            value = item["value"]
+
         return {
             "prompt": prompt,
             "response": item["response"],
             "input": _input,
-            "value": item["value"],
+            "value": value,
             "index": item["index"],
         }
 

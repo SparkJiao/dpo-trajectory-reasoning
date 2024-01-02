@@ -158,11 +158,13 @@ def llama_last_token_cls_batch_forward(model: LlamaModel, linear: nn.Linear,
 
 
 class LlamaForCausalLMDPO(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
-    def __init__(self, config, beta: float = 0.1, label_smoothing: float = 0.0, use_ipo: bool = False):
+    def __init__(self, config, beta: float = 0.1, label_smoothing: float = 0.0, use_ipo: bool = False, loss_type: str = "sigmoid"):
         super().__init__(config)
         self.beta = beta
         self.label_smoothing = label_smoothing
         self.use_ipo = use_ipo
+        self.loss_type = loss_type
+        logger.warning(f"Using loss type: {self.loss_type}")
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -199,12 +201,16 @@ class LlamaForCausalLMDPO(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
 
         logits = pi_logratios - ref_logratios
 
-        log_sigmoid = nn.LogSigmoid()
-
         if self.use_ipo:
             losses = (logits - 1 / (2 * self.beta)) ** 2
-        else:
+        elif self.loss_type == "hinge":
+            losses = torch.relu(1 - self.beta * logits)
+        elif self.loss_type == "sigmoid":
+            log_sigmoid = nn.LogSigmoid()
             losses = -log_sigmoid(self.beta * logits) * (1 - self.label_smoothing) - log_sigmoid(-self.beta * logits) * self.label_smoothing
+        else:
+            raise ValueError(f"Unsupported loss type: {self.loss_type}")
+
         chosen_rewards = self.beta * (policy_chosen_logps - reference_chosen_logps).detach()
         rejected_rewards = self.beta * (policy_rejected_logps - reference_rejected_logps).detach()
 
