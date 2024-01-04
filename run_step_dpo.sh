@@ -1,0 +1,2 @@
+srun -p NH100q -w node15 deepspeed --include localhost:0,1,2,3 --master_port 10005 trainer_base_ds_mul.py seed=43 -cp conf/exp/dpo/logiqav2 -cn llama2_7b_70bdistil_step_dpo_v1_1_th
+srun -p NH100q -w node15 deepspeed --include localhost:0,1,2,3 --master_port 10005 trainer_base_ds_mul.py seed=44 -cp conf/exp/dpo/logiqav2 -cn llama2_7b_70bdistil_step_dpo_v1_1_th

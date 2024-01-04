@@ -1,7 +1,7 @@
 defaults:
   - hydra: default
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero1
   - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
-#  - deepspeed@ds_cfg: train_hybrid_engine_zero2_optim_offload
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero2
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
 
@@ -11,7 +11,7 @@ hydra:
 
 sft_model_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200
 fix_hack_data_dir: ${sft_model_dir}/fix_hack_data_dir/
-train_file: ${fix_hack_data_dir}/reclor.react.train.0shot.sample10.v1.0.clean_dpo_pair.sub_train.json
+train_file: ${fix_hack_data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v12_cp800_best_of_10.neg10.pos0.1.v2.2.(2,3,4,5).pair.product.full_only.json
 dev_file: ${fix_hack_data_dir}/reclor.react.train.0shot.sample10.v1.0.clean_dpo_pair.sub_dev.json
 test_file:
 
@@ -77,8 +77,7 @@ model_name_or_path: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/c
 pretrain:
 
 
-#exp_name: llama2.7b.chat.reclor.mixtral.dpo.fix_hack.A100.40.w8.v2.0.s${seed}
-exp_name: llama2.7b.chat.reclor.mixtral.dpo.fix_hack.H100.w4.v2.0.s${seed}
+exp_name: llama2.7b.chat.reclor.mixtral.step.dpo.fix_hack.H100.w4.v2.2.1.s${seed}
 exp_notes:
 output_dir: experiments/${exp_name}
 

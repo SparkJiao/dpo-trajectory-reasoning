@@ -8,7 +8,6 @@ import vllm
 
 from general_util.logger import get_child_logger
 
-
 logger = get_child_logger(__name__)
 
 
@@ -47,7 +46,33 @@ class SeparatorClean:
         return preds[0]
 
 
-class ReActSeparatorClean:
+# class ReActSeparatorClean:
+#     def __init__(self, separator: str = "Context:", separate_idx: int = 0, regrex: str = "A|B|C|D"):
+#         self.separator = separator  # Use for remove generated dummy examples
+#         self.separate_idx = separate_idx
+#         self.regrex = re.compile(regrex)
+#
+#     def __call__(self, pred: str):
+#         if self.separator in pred:
+#             groups = pred.split(self.separator)
+#             pred = groups[self.separate_idx]
+#
+#         if "Finish" in pred:
+#             pred = pred.split("Finish")[1]
+#             preds = re.findall(self.regrex, pred)
+#             if len(preds) == 0:
+#                 return ""
+#             elif len(preds) == 1:
+#                 return preds[0]
+#             else:
+#                 return ""  # FIXED@2023-12-27: To avoid the case where the large language models tends to generate multiple predictions to hack the answer.
+#
+#         preds = re.findall(self.regrex, pred)
+#         if len(preds) == 0:
+#             return ""
+#         return preds[-1]
+
+class ReActSeparatorClean:  # FIXED@2024-01-03: Add hard constraint.
     def __init__(self, separator: str = "Context:", separate_idx: int = 0, regrex: str = "A|B|C|D"):
         self.separator = separator  # Use for remove generated dummy examples
         self.separate_idx = separate_idx
@@ -58,8 +83,9 @@ class ReActSeparatorClean:
             groups = pred.split(self.separator)
             pred = groups[self.separate_idx]
 
-        if "Finish" in pred:
-            pred = pred.split("Finish")[1]
+        if "Finish[" in pred:
+            pred = pred.split("Finish[")[1]
+            pred = pred.split("]")[0]
             preds = re.findall(self.regrex, pred)
             if len(preds) == 0:
                 return ""
@@ -68,10 +94,11 @@ class ReActSeparatorClean:
             else:
                 return ""  # FIXED@2023-12-27: To avoid the case where the large language models tends to generate multiple predictions to hack the answer.
 
-        preds = re.findall(self.regrex, pred)
-        if len(preds) == 0:
-            return ""
-        return preds[-1]
+        # preds = re.findall(self.regrex, pred)
+        # if len(preds) == 0:
+        #     return ""
+        # return preds[-1]
+        return ""
 
 
 class BinaryAnswerClean:

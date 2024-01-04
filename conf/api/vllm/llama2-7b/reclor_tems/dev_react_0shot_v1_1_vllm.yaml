@@ -2,7 +2,7 @@ defaults:
   - hydra: default
   - reader/reclor@read_tensor: react_service_0shot_v1_0
   - post_process: openai_react
-#  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+  - api/vllm/vllm_params@sampling_params: sampling_param_greedy
   - _self_
 
 hydra:
@@ -11,37 +11,30 @@ hydra:
 
 train_file: ../research.data/reclor_data/train.json
 dev_file: ../research.data/reclor_data/val.json
-test_file: ${train_file}
+test_file: ${dev_file}
 
 save_best: False
 exp_name:
 exp_notes:
-output_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/
-eval_sub_path:
+output_dir: experiments/${exp_name}
 
-#sampling_params:
-#  max_tokens: 3072
+step:
+eval_sub_path: checkpoint-${step}
+
+sampling_params:
+  max_tokens: 2048
 gpu_memory_utilization: 0.95
 
 read_tensor:
-  split_size: -1
-  split_id: 0
-  service_based: True
+  template_id: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "  # In version v2.1, we change the template to: ```xxx\n\nThought 1: ```
+  service_based: False
   service_processor:
-    _target_: data.vllm.VLLMRequestGenerator
-    api_url: http://0.0.0.0:6000/v1/completions
-    max_tokens: 3072
-    model: llama2-7b-reclor-distil
-    stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
-    n: 20
-    temperature: 2.0
-  flush_file: ${flush_file}
 
-output_file: ${output_dir}/reclor.react.train.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.json
+output_file: ${output_dir}/${eval_sub_path}/reclor.react.dev.0shot.v1.1.json
 flush_file: ${output_file}l
 
 # Dataloader
-num_workers: 16
+num_workers: 32
 prefetch_factor:
 
 # Training hyper-parameters
