@@ -1,0 +1,77 @@
+defaults:
+  - hydra: default
+#  - post_process: openai_react
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+
+response_file_1: experiments/llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.H100.w4.v1.0.th.s42/checkpoint-1200/logiqav2-test.full.qa.react.v1.0.0shot.json
+response_file_2: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w4.v1.0.th.s43/checkpoint-800/logiqav2-test.full.qa.react.v1.0.0shot.json
+
+train_file: ../research.data/AR-LSAT/data/AR_TrainingData.json
+dev_file: ../research.data/AR-LSAT/data/AR_DevelopmentData.json
+test_file: ${response_file_1}
+
+
+model:
+  _target_: data.openai_api_caller.GPTTurbo
+  model: "gpt-4-1106-preview"
+#  model: "gpt-3.5-turbo-1106"
+  max_tokens: 2048
+  temperature: 0.0
+  api_time_interval: 0
+
+output_file: api-outputs/gpt-4-1106-preview/react.cmp.dpo.v1.0.th.s42.cp1200.step-dpo.v1.0.th.s43.cp800.0shot.json
+flush_file: ${output_file}l
+
+# Data loading
+read_tensor:
+  _target_: data.general.CompareResponseReader
+  response_file_b: ${response_file_2}
+  correct_intersection: True
+  original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+  original_reader:
+    _target_: data.logiqav2.LogicQAReader
+    flat_options: True
+  template:
+    _target_: data.logiqav2.read_single_file
+    file_path: data/prompts/logiqav2/compare_response/template_th_0.txt
+  few_shot_prompts:
+  instruction:
+    _target_: data.logiqav2.read_single_file
+    file_path: data/prompts/logiqav2/compare_response/prompt_0.txt
+  compose_keys: [ "context", "question", "option_list", "response_a", "response_b" ]
+  api_based: True
+
+
+# Dataloader
+num_workers: 0
+prefetch_factor:
+
+output_dir:
+
+post_process:
+  _target_: post_processors.openai_api_callback.OpenAICallBack
+  output_file: ${output_file}
+  answer_clean:
+    _target_: post_processors.openai_api_callback.PlaceholderClean
+  resume: True
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

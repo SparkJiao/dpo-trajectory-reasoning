@@ -1,0 +1,24 @@
+Here is the problem containing a context, a question, and different options:
+
+Context:
+{}
+
+Question:
+{}
+
+Options:
+{}
+
+Reasoning process A:
+Thought 1: {}
+
+Reasoning process B:
+Thought 1: {}
+
+For each aspect of the above criteria, select one winner, or judge it as a tie, following the format:
+Reasonable: A/B/Tie
+Concise: A/B/Tie
+Logically consistent: A/B/Tie
+
+And finally, by considering all the criteria together, select one winner, or judge it as a tie, with the following format:
+Overall: A/B/Tie

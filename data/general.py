@@ -544,3 +544,86 @@ class CompleteTrajStepRewardCollator:
             "ending": endings,
         }
         return encoded_inputs
+
+
+# ========================== Compare Response
+
+class CompareResponseReader(ComposeDatasetMixin):
+    def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
+                 response_file_b: str, correct_intersection: bool,
+                 original_data_file: str, original_reader: Callable, template: str,
+                 instruction: str = "", few_shot_prompts: str = "",
+                 compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
+                 api_based: bool = False, ):
+        super().__init__(template, instruction, few_shot_prompts, compose_keys)
+        self.tokenizer = tokenizer
+
+        original_data = original_reader(original_data_file)
+
+        responses_a = json.load(open(file_path))
+        responses_b = json.load(open(response_file_b))
+
+        if correct_intersection:
+            responses_a = self.filter_correct_responses(responses_a)
+            responses_b = self.filter_correct_responses(responses_b)
+            id_set_a = set([item["id"] for item in responses_a])
+            id_set_b = set([item["id"] for item in responses_b])
+            id_set = id_set_a.intersection(id_set_b)
+            responses_a = [item for item in responses_a if item["id"] in id_set]
+            responses_b = [item for item in responses_b if item["id"] in id_set]
+
+        self.id2response_a = {item["id"]: item for item in responses_a}
+        self.id2response_b = {item["id"]: item for item in responses_b}
+
+        data = []
+        for i, item in enumerate(original_data):
+            if "index" in item:
+                item_id = item["index"]
+            else:
+                item_id = i
+            if item_id in self.id2response_a and item_id in self.id2response_b:
+                new_item = copy.deepcopy(item)
+                new_item["response_a"] = self.id2response_a[item_id]["response"]
+                new_item["response_b"] = self.id2response_b[item_id]["response"]
+                new_item["index"] = item_id
+                data.append(new_item)
+
+        logger.info(f"CompareResponseReader: {len(data)} / {len(original_data)}")
+        self.data: List[Dict[str, Any]] = data
+        self.template = template
+        self.instruction = instruction
+        self.few_shot_prompts = few_shot_prompts
+        self.compose_keys = compose_keys
+        self.api_based = api_based
+
+    def filter_correct_responses(self, responses):
+        outputs = []
+        logs = {}
+        for item in responses:
+            value = parse_leaf_node_value(item["response"], item["label"], logs)
+            if value == 1:
+                outputs.append(item)
+        logger.info(f"Filtering correct responses: {len(responses)} -> {len(outputs)}")
+        logger.info(f"Logs: {logs}")
+        return outputs
+
+    def __len__(self):
+        return len(self.data)
+
+    def api_getitem(self, index):
+        item = self.data[index]
+        prompt, _ = self.compose_input(item, "")
+
+        return {
+            "text": prompt,
+            "meta_data": {
+                "index": item["index"],
+                "label": -1,
+                "text": prompt,
+            }
+        }
+
+    def __getitem__(self, index):
+        if self.api_based:
+            return self.api_getitem(index)
+        raise NotImplementedError

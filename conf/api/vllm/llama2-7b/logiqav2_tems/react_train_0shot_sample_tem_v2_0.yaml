@@ -14,23 +14,28 @@ dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
 
 save_best: False
-exp_name:
+exp_name: llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w4.v1.0.th.s43
 exp_notes:
 output_dir: experiments/${exp_name}
 
 step: 800
 eval_sub_path: checkpoint-${step}
 
+sampling_params:
+  max_tokens: 3072
+  temperature: 2.0
+gpu_memory_utilization: 0.95
+
 read_tensor:
-  split_size: 8
+  split_size: -1
   split_id: 0
-  template_id: 6
+  template_id: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
   service_based: False
   service_processor:
 
-swap_space: 8
+#swap_space: 8
 
-output_file: ${output_dir}/${eval_sub_path}/logiqav2-train.react.sample5.${read_tensor.split_id}-${read_tensor.split_size}.v1.0.0shot.json
+output_file: ${output_dir}/${eval_sub_path}/logiqav2-train.react.sample${sampling_params.n}.tem${sampling_params.temperature}.v1.0.0shot.json
 flush_file: ${output_file}l
 
 # Dataloader

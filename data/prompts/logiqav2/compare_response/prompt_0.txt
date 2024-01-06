@@ -1,0 +1,4 @@
+Here is a logical reasoning problem, and there are two solutions describing their thinking process. Please tell me which one is better. You should consider the following criteria:
+1. Reasonable: The reasoning process is reasonable, which means each conclusion should be inferred by collecting evidence, instead of making up unknown facts.
+2. Concise: The reasoning process should not tell something irrelevant to the question.
+3. Logically consistent: There must not be contradiction in the process itself.

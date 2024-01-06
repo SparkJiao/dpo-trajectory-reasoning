@@ -11,6 +11,11 @@ from general_util.logger import get_child_logger
 logger = get_child_logger(__name__)
 
 
+class PlaceholderClean:
+    def __call__(self, pred: str):
+        return "A"
+
+
 class MCQAAnswerClean:
     def __init__(self, prompt: str = "zero-shot"):
         self.prompt = prompt
