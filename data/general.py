@@ -57,6 +57,72 @@ def process_response(response: str):
     return lines
 
 
+def process_response_v2(response: str):
+    lines = response.split("\n")
+    outputs = []
+    for line_id, line in enumerate(lines):
+
+        if line.startswith("Thought ") or line.startswith("Action ") or line.startswith("Observation "):
+            outputs.append({
+                "text": line,
+                "type": "text",
+                "line_id": line_id,
+            })
+        elif not line.strip():
+            outputs.append({
+                "text": line,
+                "type": "space",
+                "line_id": line_id,
+            })
+        else:
+            outputs.append({
+                "text": line,
+                "type": "continue",
+                "line_id": line_id,
+            })
+
+    compose_outputs = []
+    for item in outputs:
+        if item["type"] == "text":
+            compose_outputs.append((item["line_id"], item["text"]))
+        elif item["type"] == "space":
+            if len(compose_outputs):
+                tmp = compose_outputs[-1]
+                new_line_text = "\n".join([tmp[1], item["text"]])
+                compose_outputs[-1] = (tmp[0], new_line_text)
+        else:
+            if len(compose_outputs):
+                tmp = compose_outputs[-1]
+                new_line_text = "\n".join([tmp[1], item["text"]])
+                compose_outputs[-1] = (item["line_id"], new_line_text)
+            else:
+                compose_outputs.append((item["line_id"], item["text"]))
+
+    outputs = []
+    for item in compose_outputs:
+        if item[1].startswith("Thought "):
+            content = item[1][len("Thought "):]
+            content = content.strip()
+            if len(content) >= 5:
+                outputs.append(item)
+        elif item[1].startswith("Action "):
+            content = item[1][len("Action "):]
+            content = content.strip()
+            if len(content) >= 5:
+                outputs.append(item)
+        elif item[1].startswith("Observation "):
+            content = item[1][len("Observation "):]
+            content = content.strip()
+            if len(content) >= 5:
+                outputs.append(item)
+        else:
+            # logger.warning(f"Warning: Unknown line: {item[1]}")
+            if len(item[1]) >= 5:
+                outputs.append(item)
+
+    return outputs
+
+
 def clean_react_response(response: str):
     if "Context:\n" in response:
         response = response.split("Context:\n")[0]
@@ -212,6 +278,94 @@ class PartialTrajAttemptsReader:
             for s_id, s in enumerate(item["inter_states"]):
                 if s_id not in state_id2values[idx]:
                     continue
+                s["value"] = int(state_id2values[idx][s_id][0])
+                assert state_id2values[idx][s_id][1] in s["state"], (state_id2values[idx][s_id][1], s["state"])
+
+            outputs.append(item)
+
+        logger.info(f"Jumped {jumped} inter states.")
+
+        return outputs
+
+
+class PartialTrajAttemptsReaderV2:
+    """
+    In this version, we want to the model to be optimized on those responses ending with meaningful responses, instead of blank step, e.g., "Action 1: \n".
+    """
+
+    def __init__(self, partial_traj_file: str):
+        self.partial_traj_file = partial_traj_file
+
+    def __call__(self, attempt_response_file):
+        if os.path.exists(attempt_response_file):
+            files = [attempt_response_file]
+        else:
+            files = glob(attempt_response_file)
+
+        state_id2values = collections.defaultdict(dict)
+        logs = {}
+        for file in files:
+            data = json.load(open(file, "r"))
+
+            for item in data:
+                idx = item["id"]
+                idx, state_id = idx.split("_")
+                v = 0
+                flag = True
+                for res, p in zip(item["response"], item["pred"]):
+                    if res == "":
+                        flag = False
+                        break
+                    if p == "":
+                        continue
+                    # if ord(p.strip()) - ord("A") == item["label"]:
+                    #     v += 1
+                    v += parse_leaf_node_value(res, item["label"], logs=logs)
+
+                if not flag:
+                    continue
+                state_id2values[int(idx)][int(state_id)] = (v, item["text"].split("Thought 1:")[1].strip())
+
+        logger.info(f"Loaded {len(state_id2values)} state values from {len(files)} files.")
+
+        if os.path.exists(self.partial_traj_file):
+            inter_state_files = [self.partial_traj_file]
+        else:
+            inter_state_files = glob(self.partial_traj_file)
+        inter_states = []
+        for state_file in inter_state_files:
+            inter_states.extend(json.load(open(state_file, "r")))
+
+        logger.info(f"Parsing inter states attempts logs: {logs}")
+        logger.info(f"Loaded {len(inter_states)} inter states from {len(inter_state_files)} files.")
+
+        jumped = 0
+        outputs = []
+        for item in tqdm(inter_states, total=len(inter_states)):
+            idx = item["id"]
+            if idx not in state_id2values:
+                jumped += 1
+                continue
+
+            for s_id, s in enumerate(item["inter_states"]):
+                if s_id not in state_id2values[idx]:
+                    continue
+                # Add filter here
+                lines = s["state"].split("\n")
+                lines = list(filter(lambda x: x.strip(), lines))
+                last_state = lines[-1]
+                if last_state.startswith("Thought "):
+                    content = last_state[len("Thought "):]
+                elif last_state.startswith("Action "):
+                    content = last_state[len("Action "):]
+                elif last_state.startswith("Observation "):
+                    content = last_state[len("Observation "):]
+                else:
+                    content = last_state
+                content = content.strip()
+                if len(content) < 5:
+                    continue
+
                 s["value"] = int(state_id2values[idx][s_id][0])
                 assert state_id2values[idx][s_id][1] in s["state"], (state_id2values[idx][s_id][1], s["state"])
 
@@ -470,6 +624,8 @@ class Attempt2ValueCollator:
 
 
 def extract_react_ending_positions(tokenizer: PreTrainedTokenizer, response: str, max_seq_length: int):
+    raise NotImplementedError()  # FIXME: Maybe we need to re-preprocess the input files from scratch for ReClor dataset. Because there are some lines are empty steps, e.g., Action 1: \n.
+
     steps = process_response(response)
     raw_lines = response.split("\n")
     endings = []
@@ -487,6 +643,27 @@ def extract_react_ending_positions(tokenizer: PreTrainedTokenizer, response: str
     assert resp_start, response
     assert len(endings) > 0, (response, steps)
     assert len(endings) == len(process_response(response[response.find("Thought 1:"):])), (response, steps)
+    return endings
+
+
+def extract_react_ending_positions_v2(tokenizer: PreTrainedTokenizer, response: str, max_seq_length: int):
+    steps = process_response_v2(response)
+    raw_lines = response.split("\n")
+    endings = []
+    resp_start = False
+    for step_id, step in steps:
+        if not resp_start:
+            if step.startswith("Thought 1:"):
+                resp_start = True
+            else:
+                continue
+        partial_traj = "\n".join(raw_lines[:(step_id + 1)])
+        input_ids = tokenizer(partial_traj, truncation=True, max_length=max_seq_length)["input_ids"]
+        endings.append(len(input_ids) - 1)
+
+    assert resp_start, response
+    assert len(endings) > 0, (response, steps)
+    assert len(endings) == len(process_response_v2(response[response.find("Thought 1:"):])), (response, steps)
     return endings
 
 
@@ -524,7 +701,8 @@ class CompleteTrajStepRewardCollator:
         endings = []
         padding_len = torch.sum(1 - encoded_inputs["attention_mask"], dim=-1)
         for b, item in enumerate(batch):
-            ending = extract_react_ending_positions(self.tokenizer, item["input"], self.max_seq_length)
+            # ending = extract_react_ending_positions(self.tokenizer, item["input"], self.max_seq_length)
+            ending = extract_react_ending_positions_v2(self.tokenizer, item["input"], self.max_seq_length)  # FIXED: @2024/01/06 for ReClor.
             if self.tokenizer.padding_side == "left":
                 ending = [e + padding_len[b].item() for e in ending]
             endings.append(ending)

@@ -35,5 +35,5 @@ if args.input_file2 is not None:
     output_file = os.path.join(os.path.dirname(args.input_file), output_file_name)
 else:
     output_file = args.input_file
-json.dump(dev_data, open(output_file.replace(".json", ".sub_dev.json"), "w"), indent=2, ensure_ascii=False)
-json.dump(train_data, open(output_file.replace(".json", ".sub_train.json"), "w"), indent=2, ensure_ascii=False)
+json.dump(dev_data, open(output_file.replace(".json", f".sub_dev.{len(dev_data)}.json"), "w"), indent=2, ensure_ascii=False)
+json.dump(train_data, open(output_file.replace(".json", f".sub_train.{len(train_data)}.json"), "w"), indent=2, ensure_ascii=False)

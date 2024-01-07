@@ -82,6 +82,7 @@ def run_inference(cfg: DictConfig, dataset):
 def main(cfg: DictConfig):
     global logger
     logger = setting_logger(cfg.output_file, local_rank=cfg.local_rank)
+    logger.warning(f"CPU cores: {os.cpu_count()}")
 
     # Set seed
     set_seed(cfg)

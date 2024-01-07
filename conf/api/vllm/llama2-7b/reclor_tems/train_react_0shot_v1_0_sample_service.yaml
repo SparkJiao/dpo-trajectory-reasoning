@@ -33,8 +33,11 @@ read_tensor:
     max_tokens: 3072
     model: llama2-7b-reclor-distil
     stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
-    n: 20
-    temperature: 2.0
+#    n: 20
+    n: 10
+#    temperature: 2.0
+#    temperature: 1.0
+    temperature: 0.7
   flush_file: ${flush_file}
 
 output_file: ${output_dir}/reclor.react.train.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.json

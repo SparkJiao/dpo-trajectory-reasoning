@@ -38,8 +38,8 @@ read_tensor:
     stop: [ "</s>", "\n\n\n\n" ]
 #    n: 10
     n: 5
-#    temperature: 1.0
-    temperature: 2.0
+    temperature: 1.0
+#    temperature: 2.0
   flush_file: ${flush_file}
 
 output_file: ${output_dir}/logiqav2.react.train.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.json

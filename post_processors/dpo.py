@@ -228,6 +228,72 @@ def process_response(response: str):
     return lines
 
 
+def process_response_v2(response: str):
+    lines = response.split("\n")
+    outputs = []
+    for line_id, line in enumerate(lines):
+
+        if line.startswith("Thought ") or line.startswith("Action ") or line.startswith("Observation "):
+            outputs.append({
+                "text": line,
+                "type": "text",
+                "line_id": line_id,
+            })
+        elif not line.strip():
+            outputs.append({
+                "text": line,
+                "type": "space",
+                "line_id": line_id,
+            })
+        else:
+            outputs.append({
+                "text": line,
+                "type": "continue",
+                "line_id": line_id,
+            })
+
+    compose_outputs = []
+    for item in outputs:
+        if item["type"] == "text":
+            compose_outputs.append((item["line_id"], item["text"]))
+        elif item["type"] == "space":
+            if len(compose_outputs):
+                tmp = compose_outputs[-1]
+                new_line_text = "\n".join([tmp[1], item["text"]])
+                compose_outputs[-1] = (tmp[0], new_line_text)
+        else:
+            if len(compose_outputs):
+                tmp = compose_outputs[-1]
+                new_line_text = "\n".join([tmp[1], item["text"]])
+                compose_outputs[-1] = (item["line_id"], new_line_text)
+            else:
+                compose_outputs.append((item["line_id"], item["text"]))
+
+    outputs = []
+    for item in compose_outputs:
+        if item[1].startswith("Thought "):
+            content = item[1][len("Thought "):]
+            content = content.strip()
+            if len(content) >= 5:
+                outputs.append(item)
+        elif item[1].startswith("Action "):
+            content = item[1][len("Action "):]
+            content = content.strip()
+            if len(content) >= 5:
+                outputs.append(item)
+        elif item[1].startswith("Observation "):
+            content = item[1][len("Observation "):]
+            content = content.strip()
+            if len(content) >= 5:
+                outputs.append(item)
+        else:
+            # logger.warning(f"Warning: Unknown line: {item[1]}")
+            if len(item[1]) >= 5:
+                outputs.append(item)
+
+    return outputs
+
+
 class ResponseProcessRewardPostProcessor(DistGatherMixin):
     def __init__(self, reduction: str = "product", prob_labels: str = "(2,3)"):
         """
@@ -257,7 +323,8 @@ class ResponseProcessRewardPostProcessor(DistGatherMixin):
         logits = batch_model_outputs["logits"].tolist()
 
         for i, endings in enumerate(ending_positions):
-            tmp = len(process_response("Thought 1: " + responses[i]))
+            # tmp = len(process_response("Thought 1: " + responses[i]))
+            tmp = len(process_response_v2(responses[i]))  # FIXED: @2024/01/06 for ReClor.
             assert len(endings) == tmp, (len(endings), tmp, endings, responses[i])
 
         ending_logits = []

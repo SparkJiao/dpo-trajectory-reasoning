@@ -1,0 +1,58 @@
+defaults:
+  - hydra: default
+  - reader/reclor@read_tensor: react_service_1shot_v1_0
+  - post_process: openai_react
+#  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+
+train_file: ../research.data/reclor_data/train.json
+dev_file: ../research.data/reclor_data/val.json
+test_file: ${train_file}
+
+#num_shot: 5
+
+output_file: api-outputs/gpt35turbo1106/logiqav2.train.react.1shot.gpt35turbo1106.sample10.tem${model.temperature}.json
+flush_file: ${output_file}l
+
+model:
+  _target_: data.openai_api_caller.GPTTurbo
+  model: "gpt-3.5-turbo-1106"
+  max_tokens: 3072
+#  temperature: 1.0
+  temperature: 0.7
+  api_time_interval: 1
+  top_p: 0.8
+  n: 10
+
+# Data loading
+read_tensor:
+  api_based: True
+  flush_file: ${flush_file}
+
+# Dataloader
+num_workers: 0
+prefetch_factor: 2
+
+output_dir:
+
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

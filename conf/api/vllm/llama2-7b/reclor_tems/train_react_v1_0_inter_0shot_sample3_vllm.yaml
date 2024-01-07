@@ -1,6 +1,6 @@
 defaults:
   - hydra: default
-  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+#  - api/vllm/vllm_params@sampling_params: sampling_param_sample
   - post_process: openai_react
   - _self_
 
@@ -23,11 +23,18 @@ data_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-
 
 sample_num: 3
 
+sampling_params:
+  _target_: vllm.SamplingParams
+  n: ${sample_num}
+  temperature: 1.0
+  stop: [ "</s>", "\n\n\n\n" ]
+  max_tokens: 2048
+
+
 #output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.0.rs0.4.r0.3.sample3.json
 #output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.sample5.${read_tensor.split_id}-of-${read_tensor.split_size}.json
 #output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.sample${sample_num}.json
-#output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sample${sample_num}.json
-output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.1000.sample${sample_num}.json
+output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sample${sample_num}.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -41,8 +48,7 @@ read_tensor:
 #    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json
 #    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_dev.json  # Fix @ 2023/12/29
 #    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.json  # Fix @ 2023/12/29
-#    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.json  # Fix @ 2024/01/06
-    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.1000.json  # Fix @ 2024/01/06
+    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.json  # Fix @ 2024/01/06
   template_id: 9
   instruction:
     _target_: data.prompts.logiqav2.react.prompts.get_prompt
@@ -52,31 +58,31 @@ read_tensor:
   split_size: -1
   split_id: 0
   api_based: False
-  service_based: True
+  service_based: False
   service_processor:
-    _target_: data.vllm.VLLMRequestGenerator
-    api_url: http://0.0.0.0:6000/v1/completions
-#    max_tokens: 3072
-    max_tokens: 2048
-    model: llama2-7b-reclor-distil
-    stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
-#    n: 3
-    n: ${sample_num}
-    temperature: 1.0
+#    _target_: data.vllm.VLLMRequestGenerator
+#    api_url: http://0.0.0.0:6000/v1/completions
+##    max_tokens: 3072
+#    max_tokens: 2048
+#    model: llama2-7b-reclor-distil
+#    stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
+##    n: 3
+#    n: ${sample_num}
+#    temperature: 1.0
   flush_file: ${flush_file}
 
 post_process:
   resume: True
 
 # Dataloader
-num_workers: 32
-prefetch_factor: 4
+num_workers:
+prefetch_factor:
 
 # Training hyper-parameters
 per_gpu_train_batch_size: 1
 per_gpu_eval_batch_size: 1
 
-ddp_eval: True
+ddp_eval: False
 no_cuda: False
 seed: 42
 local_rank: -1
