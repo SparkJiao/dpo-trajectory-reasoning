@@ -19,7 +19,8 @@ output_dir: experiments/${exp_name}
 
 #data_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states
 #data_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.dpo.H100.w4.v1.0/checkpoint-1600/react-inter-states
-data_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/react-inter-states/
+#data_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/react-inter-states/
+data_dir: experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.A100.w2.v1.0/checkpoint-2400/
 
 sample_num: 3
 
@@ -27,7 +28,9 @@ sample_num: 3
 #output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.sample5.${read_tensor.split_id}-of-${read_tensor.split_size}.json
 #output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.sample${sample_num}.json
 #output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sample${sample_num}.json
-output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.1000.sample${sample_num}.json
+#output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.1000.sample${sample_num}.json
+#output_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_dev.500.sample${sample_num}.tem${read_tensor.service_processor.temperature}.json
+output_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_dev.38.sample${sample_num}.tem${read_tensor.service_processor.temperature}.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -42,7 +45,9 @@ read_tensor:
 #    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_dev.json  # Fix @ 2023/12/29
 #    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.json  # Fix @ 2023/12/29
 #    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.json  # Fix @ 2024/01/06
-    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.1000.json  # Fix @ 2024/01/06
+#    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.1000.json  # Fix @ 2024/01/06
+#    inter_states_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_dev.500.json  # Add new column @ 2024/01/08
+    inter_states_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_dev.38.json  # Add new column @ 2024/01/08
   template_id: 9
   instruction:
     _target_: data.prompts.logiqav2.react.prompts.get_prompt
@@ -62,7 +67,8 @@ read_tensor:
     stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
 #    n: 3
     n: ${sample_num}
-    temperature: 1.0
+#    temperature: 1.0
+    temperature: 0.7
   flush_file: ${flush_file}
 
 post_process:

@@ -16,7 +16,8 @@ test_file: ${train_file}
 save_best: False
 exp_name:
 exp_notes:
-output_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/
+#output_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/
+output_dir: experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.A100.w2.v1.0/checkpoint-2400/
 eval_sub_path:
 
 #sampling_params:

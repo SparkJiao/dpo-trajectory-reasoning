@@ -291,6 +291,7 @@ class PartialTrajAttemptsReader:
 class PartialTrajAttemptsReaderV2:
     """
     In this version, we want to the model to be optimized on those responses ending with meaningful responses, instead of blank step, e.g., "Action 1: \n".
+    Update @ 2024/01/08: Remove duplicates for more accurate estimation.
     """
 
     def __init__(self, partial_traj_file: str):
@@ -312,14 +313,15 @@ class PartialTrajAttemptsReaderV2:
                 idx, state_id = idx.split("_")
                 v = 0
                 flag = True
+                resp_set = set([resp for resp in item["response"]])
+                if len(resp_set) != len(item["response"]):
+                    continue
                 for res, p in zip(item["response"], item["pred"]):
                     if res == "":
                         flag = False
                         break
                     if p == "":
                         continue
-                    # if ord(p.strip()) - ord("A") == item["label"]:
-                    #     v += 1
                     v += parse_leaf_node_value(res, item["label"], logs=logs)
 
                 if not flag:
@@ -474,6 +476,96 @@ class Attempt2ValueRewardModelingDataset(ComposeDatasetMixin):
                             new_item["index"] = item_id if not re_index else len(data)
                             data.append(new_item)
                     for full_response in inter_item["response"]:
+                        value = parse_leaf_node_value(full_response, item["label"], logs) * max_value
+                        new_item = copy.deepcopy(item)
+                        new_item["response"] = full_response
+                        new_item["value"] = value
+                        new_item["index"] = item_id if not re_index else len(data)
+                        data.append(new_item)
+
+        logger.info(f"Attempt2ValueRewardModelingDataset: {len(data)} / {len(original_data)}")
+        self.data: List[Dict[str, Any]] = data
+        self.template = template
+        self.instruction = instruction
+        self.few_shot_prompts = few_shot_prompts
+        self.compose_keys = compose_keys
+        self.value_mapping = value_mapping
+
+        if format_filter:
+            logger.info(f"Abandoned some of non-format examples:\n{len(abandoned)}")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        item = self.data[index]
+        prompt, _input = self.compose_input(item, item["response"])
+
+        if self.value_mapping is not None:
+            value = self.value_mapping.mapping(item["value"])
+        else:
+            value = item["value"]
+
+        return {
+            "prompt": prompt,
+            "response": item["response"],
+            "input": _input,
+            "value": value,
+            "index": item["index"],
+        }
+
+
+class Attempt2ValueRewardModelingDatasetV2(ComposeDatasetMixin):
+    # Update from `Attempt2ValueRewardModelingDataset`: @2024/01/08
+    #   Remove duplicate responses, including intermediate states.
+    def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
+                 original_data_file: str, original_reader: Callable, template: str, reader: Callable, max_value: int,
+                 instruction: str = "", few_shot_prompts: str = "",
+                 compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
+                 format_filter: Optional[Callable] = None,
+                 re_index: bool = False,
+                 value_mapping: Optional[Value2LabelMapping] = None):
+        super().__init__(template, instruction, few_shot_prompts, compose_keys)
+
+        self.tokenizer = tokenizer
+
+        inter_states = reader(file_path)
+        self.id2inter_states = collections.defaultdict(list)
+        for item in inter_states:
+            self.id2inter_states[item["id"]].append(item)
+
+        original_data = original_reader(original_data_file)
+        data = []
+        abandoned = []
+        logs = {}
+        for i, item in enumerate(original_data):
+            if "index" in item:
+                item_id = item["index"]
+            else:
+                item_id = i
+            if item_id in self.id2inter_states:
+                for inter_item in self.id2inter_states[item_id]:
+                    if format_filter is not None and not format_filter(inter_item):
+                        abandoned.append(inter_item)
+                        continue
+
+                    response_set = set()
+                    for state in inter_item["inter_states"]:
+                        if "value" in state:
+                            response = state["state"]
+                            if response in response_set:
+                                continue
+                            response_set.add(response)
+                            value = state["value"]
+                            new_item = copy.deepcopy(item)
+                            new_item["response"] = response
+                            new_item["value"] = value
+                            new_item["index"] = item_id if not re_index else len(data)
+                            data.append(new_item)
+                    for full_response in inter_item["response"]:
+                        if full_response in response_set:
+                            continue
+                        response_set.add(full_response)
                         value = parse_leaf_node_value(full_response, item["label"], logs) * max_value
                         new_item = copy.deepcopy(item)
                         new_item["response"] = full_response

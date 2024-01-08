@@ -11,19 +11,30 @@ hydra:
 
 train_file: ../research.data/reclor_data/train.json
 dev_file: ../research.data/reclor_data/val.json
-test_file: ${dev_file}
+test_file: ../research.data/reclor_data/test.json
 
+model:
+port: 6000
 save_best: False
 exp_name:
 exp_notes:
 output_dir: ../pretrained-models/Mixtral-8x7B-Instruct-v0.1
 eval_sub_path:
 
-output_file: ${output_dir}/reclor.react.dev.1shot.v1.0.json
+output_file: ${output_dir}/reclor.react.test.1shot.v1.0.json
 flush_file: ${output_file}l
 
+read_tensor:
+  service_based: True
+  service_processor:
+    _target_: data.vllm.VLLMRequestGenerator
+    api_url: http://0.0.0.0:${port}/v1/completions
+    max_tokens: 3072
+    model: ${model}
+    stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
+
 # Dataloader
-num_workers: 32
+num_workers: 64
 prefetch_factor: 2
 
 # Training hyper-parameters

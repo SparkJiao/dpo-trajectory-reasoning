@@ -10,15 +10,24 @@ hydra:
 
 train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
 dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
-test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+#test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+test_file: ${dev_file}
 
 step:
-port: 8000
+port: 6000
 exp_dir:
 model:
 
+read_tensor:
+  service_processor:
+    _target_: data.vllm.VLLMRequestGenerator
+    api_url: http://0.0.0.0:${port}/v1/completions
+    max_tokens: 3072
+    model: ${model}
+    stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
 
-output_file: ${exp_dir}/logiqav2-test.qa.react.v1.0.1shot.json
+#output_file: ${exp_dir}/logiqav2-test.qa.react.v1.0.1shot.json
+output_file: ${exp_dir}/logiqav2-dev.qa.react.v1.0.1shot.json
 flush_file: ${output_file}l
 
 # Dataloader

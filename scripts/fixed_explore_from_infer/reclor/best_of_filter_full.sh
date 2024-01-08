@@ -81,17 +81,30 @@ data_dir=experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1
 #  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
 
 # ================================ Fix the bug of blank reasoning steps @ 2024/01/05
-best_of=10
-pos_margin=0.2
-max_neg_num=10
-index="(2,3)"
-reduction="product"
-reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w4.v1.5.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-800/eval_predictions_rank0.json"
-python scripts/best_of_filter_by_reward_v2.2.py \
-  --input_file "$data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json" \
-  --reward_file $reward_file \
-  --output_file "$data_dir/../fix_hack_data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v15_cp800_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.${index}.pair.${reduction}.full_only.json" \
-  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
+#best_of=10
+#pos_margin=0.2
+#max_neg_num=10
+#index="(2,3)"
+#reduction="product"
+#reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w4.v1.5.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-800/eval_predictions_rank0.json"
+#python scripts/best_of_filter_by_reward_v2.2.py \
+#  --input_file "$data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json" \
+#  --reward_file $reward_file \
+#  --output_file "$data_dir/../fix_hack_data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v15_cp800_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.${index}.pair.${reduction}.full_only.json" \
+#  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
+
+
+#best_of=10
+#pos_margin=0.5
+#max_neg_num=10
+#index="(1,2,3)"
+#reduction="product"
+#reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w4.v1.5.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-1400/eval_predictions_rank0.json"
+#python scripts/best_of_filter_by_reward_v2.2.py \
+#  --input_file "$data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json" \
+#  --reward_file $reward_file \
+#  --output_file "$data_dir/../fix_hack_data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v15_cp1400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.${index}.pair.${reduction}.full_only.json" \
+#  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
 
 #best_of=10
 #pos_margin=0.25
@@ -104,6 +117,31 @@ python scripts/best_of_filter_by_reward_v2.2.py \
 #  --reward_file $reward_file \
 #  --output_file "$data_dir/../fix_hack_data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v15_cp1400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.${index}.pair.${reduction}.full_only.json" \
 #  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
+
+
+#best_of=10
+#pos_margin=0.15
+#max_neg_num=10
+#index="(2,3)"
+#reduction="product"
+#reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w4.v1.5.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-1400/eval_predictions_rank0.json"
+#python scripts/best_of_filter_by_reward_v2.2.py \
+#  --input_file "$data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json" \
+#  --reward_file $reward_file \
+#  --output_file "$data_dir/../fix_hack_data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v15_cp1400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.${index}.pair.${reduction}.full_only.json" \
+#  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
+
+best_of=10
+pos_margin=0.15
+max_neg_num=10
+index="(2,3)"
+reduction="product"
+reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w4.v1.5.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-800/eval_predictions_rank0.json"
+python scripts/best_of_filter_by_reward_v2.2.py \
+  --input_file "$data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.json" \
+  --reward_file $reward_file \
+  --output_file "$data_dir/../fix_hack_data_dir/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_v15_cp800_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.${index}.pair.${reduction}.full_only.json" \
+  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
 
 
 # ===================== Sampling from DPO model.
@@ -137,9 +175,9 @@ python scripts/best_of_filter_by_reward_v2.2.py \
 #
 
 # ================================================ Debug for retraining reward model with correct `num_labels`
-#index="(2,3)"
+#index="(1,2,3)"
 #reduction="product"
-#reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w8.v1.4.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-1000/eval_predictions_rank0.json"
+##reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w8.v1.4.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-1000/eval_predictions_rank0.json"
 ##reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w4.v1.5.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-800/eval_predictions_rank0.json"
 #reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w4.v1.5.s42/train.rewards.raw_trajectory.product.v1.0/test-checkpoint-1400/eval_predictions_rank0.json"
 #python scripts/combine_reward_debug_v1.0.py \
@@ -147,3 +185,11 @@ python scripts/best_of_filter_by_reward_v2.2.py \
 #  --reward_file $reward_file \
 #  --output_file "./reward_reclor_debug_v1.5_cp1400_${index}_${reduction}.json" --reduction $reduction --prob_labels ${index}
 
+#index="(2,3)"
+#reduction="product"
+#reward_file="experiments/llama2.7b.chat.reclor.mixtral.prm.fix_hack.H100.w4.v1.5.s42/llama2.7b.chat.reclor.mixtral.dpo.fix_hack.A100.40.w8.v2.0.s42.checkpoint-400.reclor.react.train.0shot.sample10.v1.0.cleaned.v1.0/test-checkpoint-1400/eval_predictions_rank0.json"
+#data_dir="experiments/llama2.7b.chat.reclor.mixtral.dpo.fix_hack.A100.40.w8.v2.0.s42/checkpoint-400/react-inter-states/"
+#python scripts/combine_reward_debug_v1.0.py \
+#  --input_file "$data_dir/reclor.react.train.0shot.sample10.v1.0.cleaned.json" \
+#  --reward_file $reward_file \
+#  --output_file "./reward_reclor_debug_v1.5_cp1400_iter1_${index}_${reduction}.json" --reduction $reduction --prob_labels ${index}
