@@ -3,6 +3,8 @@ import json
 import os.path
 from typing import List, Dict, Tuple, Union, Any, Callable, Optional
 from glob import glob
+
+import omegaconf
 from omegaconf.listconfig import ListConfig
 from torch.utils.data import Dataset
 import collections
@@ -99,28 +101,33 @@ def process_response_v2(response: str):
                 compose_outputs.append((item["line_id"], item["text"]))
 
     outputs = []
+    types = []
     for item in compose_outputs:
         if item[1].startswith("Thought "):
             content = item[1][len("Thought "):]
             content = content.strip()
             if len(content) >= 5:
                 outputs.append(item)
+                types.append("Thought")
         elif item[1].startswith("Action "):
             content = item[1][len("Action "):]
             content = content.strip()
             if len(content) >= 5:
                 outputs.append(item)
+                types.append("Action")
         elif item[1].startswith("Observation "):
             content = item[1][len("Observation "):]
             content = content.strip()
             if len(content) >= 5:
                 outputs.append(item)
+                types.append("Observation")
         else:
             # logger.warning(f"Warning: Unknown line: {item[1]}")
             if len(item[1]) >= 5:
                 outputs.append(item)
+                types.append("Unknown")
 
-    return outputs
+    return outputs, types
 
 
 def clean_react_response(response: str):
@@ -298,7 +305,9 @@ class PartialTrajAttemptsReaderV2:
         self.partial_traj_file = partial_traj_file
 
     def __call__(self, attempt_response_file):
-        if os.path.exists(attempt_response_file):
+        if isinstance(attempt_response_file, omegaconf.ListConfig):
+            files = list(attempt_response_file)
+        elif os.path.exists(attempt_response_file):
             files = [attempt_response_file]
         else:
             files = glob(attempt_response_file)
@@ -306,6 +315,7 @@ class PartialTrajAttemptsReaderV2:
         state_id2values = collections.defaultdict(dict)
         logs = {}
         for file in files:
+            logger.info(f"Loading {file}")
             data = json.load(open(file, "r"))
 
             for item in data:
@@ -524,7 +534,8 @@ class Attempt2ValueRewardModelingDatasetV2(ComposeDatasetMixin):
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
                  format_filter: Optional[Callable] = None,
                  re_index: bool = False,
-                 value_mapping: Optional[Value2LabelMapping] = None):
+                 value_mapping: Optional[Value2LabelMapping] = None,
+                 remove_full_response: bool = False):
         super().__init__(template, instruction, few_shot_prompts, compose_keys)
 
         self.tokenizer = tokenizer
@@ -562,6 +573,8 @@ class Attempt2ValueRewardModelingDatasetV2(ComposeDatasetMixin):
                             new_item["value"] = value
                             new_item["index"] = item_id if not re_index else len(data)
                             data.append(new_item)
+                    if remove_full_response:
+                        continue
                     for full_response in inter_item["response"]:
                         if full_response in response_set:
                             continue
@@ -739,9 +752,10 @@ def extract_react_ending_positions(tokenizer: PreTrainedTokenizer, response: str
 
 
 def extract_react_ending_positions_v2(tokenizer: PreTrainedTokenizer, response: str, max_seq_length: int):
-    steps = process_response_v2(response)
+    steps, step_types = process_response_v2(response)
     raw_lines = response.split("\n")
     endings = []
+    ending_types = []
     resp_start = False
     for step_id, step in steps:
         if not resp_start:
@@ -752,11 +766,12 @@ def extract_react_ending_positions_v2(tokenizer: PreTrainedTokenizer, response: 
         partial_traj = "\n".join(raw_lines[:(step_id + 1)])
         input_ids = tokenizer(partial_traj, truncation=True, max_length=max_seq_length)["input_ids"]
         endings.append(len(input_ids) - 1)
+        ending_types.append(step_types[step_id])
 
     assert resp_start, response
     assert len(endings) > 0, (response, steps)
-    assert len(endings) == len(process_response_v2(response[response.find("Thought 1:"):])), (response, steps)
-    return endings
+    assert len(endings) == len(process_response_v2(response[response.find("Thought 1:"):])[0]), (response, steps)
+    return endings, ending_types
 
 
 class CompleteTrajStepRewardCollator:
@@ -791,19 +806,15 @@ class CompleteTrajStepRewardCollator:
         labels[prompt_mask] = self.tokenizer.pad_token_id
 
         endings = []
+        step_types = []
         padding_len = torch.sum(1 - encoded_inputs["attention_mask"], dim=-1)
         for b, item in enumerate(batch):
-            # ending = extract_react_ending_positions(self.tokenizer, item["input"], self.max_seq_length)
-            ending = extract_react_ending_positions_v2(self.tokenizer, item["input"], self.max_seq_length)  # FIXED: @2024/01/06 for ReClor.
+            ending, ending_types = extract_react_ending_positions_v2(self.tokenizer, item["input"], self.max_seq_length)  # FIXED: @2024/01/06 for ReClor.
             if self.tokenizer.padding_side == "left":
                 ending = [e + padding_len[b].item() for e in ending]
             endings.append(ending)
-            # tmp = process_response("Thought 1:" + item["input"].split("Thought 1:")[1])
-            # tmp2 = process_response("Thought 1: " + item["response"])
-            # assert len(ending) == len(tmp), (item["input"], ending)
-            # print("A", len(ending))
-            # print("B", len(tmp))
-            # print("C", len(tmp2))
+            step_types.append(ending_types)
+            assert len(step_types) == len(ending), (step_types, ending)
 
         encoded_inputs["labels"] = labels
         encoded_inputs["meta_data"] = {
@@ -812,6 +823,7 @@ class CompleteTrajStepRewardCollator:
             "input": inputs,
             "response": [item["response"] for item in batch],
             "ending": endings,
+            "type": step_types,
         }
         return encoded_inputs
 

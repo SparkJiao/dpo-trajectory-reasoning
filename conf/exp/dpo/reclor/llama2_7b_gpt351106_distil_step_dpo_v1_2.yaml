@@ -10,7 +10,7 @@ hydra:
     - file://conf/
 
 sft_model_dir: experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.A100.w2.v1.0/checkpoint-2400
-train_file: ${sft_model_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v10_cp800_best_of_10.neg10.pos0.7.v2.2.(2,3).pair.product.full_only.json
+train_file: ${sft_model_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v10_cp800_best_of_10.neg10.pos0.8.v2.2.(2,3).pair.product.full_only.json
 dev_file:
 test_file:
 
@@ -28,7 +28,7 @@ device_map:
 
 model:
   _target_: models.llama.LlamaForCausalLMDPO.from_pretrained_with_ref_model
-  beta: 0.1
+  beta: 0.05
   gradient_checkpointing: True
   pad_token_id: 0
   attn_implementation: "flash_attention_2"
@@ -76,7 +76,7 @@ model_name_or_path: ${sft_model_dir}
 pretrain:
 
 
-exp_name: llama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.H100.w2.v1.1.s${seed}
+exp_name: llama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.H100.w2.v1.2.s${seed}
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -92,7 +92,7 @@ per_gpu_train_batch_size: 4  # H100
 per_gpu_eval_batch_size: 8
 #learning_rate: 1e-4
 #learning_rate: 5e-6
-learning_rate: 2e-6
+learning_rate: 1e-6
 gradient_accumulation_steps: 4
 weight_decay: 0.01
 adam_epsilon: 1e-6

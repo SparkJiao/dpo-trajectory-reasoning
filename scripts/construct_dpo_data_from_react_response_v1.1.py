@@ -88,6 +88,7 @@ def main():
     print(len(data))
 
     cleaned_data = []
+    avg_resp_num = 0
     for item in data:
         response = item["response"]
         preds = item["pred"]
@@ -108,8 +109,10 @@ def main():
         item["response"] = new_responses
         item["pred"] = new_preds
         cleaned_data.append(item)
+        avg_resp_num += len(new_responses)
 
     print(f"Clean: {len(data)} -> {len(cleaned_data)}")
+    print(f"Average response number: {avg_resp_num / len(cleaned_data)}")
 
     outputs = []
     all_chosen_data = []

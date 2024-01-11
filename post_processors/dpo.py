@@ -307,7 +307,6 @@ class ResponseProcessRewardPostProcessor(DistGatherMixin):
 
     def logit2prob(self, logits):
         probs = torch.softmax(logits, dim=-1)
-        # probs = probs[:, 2] + probs[:, 3]
         probs = probs[:, self.prob_labels].sum(dim=-1)
         return probs
 
@@ -319,7 +318,6 @@ class ResponseProcessRewardPostProcessor(DistGatherMixin):
         responses = meta_data["response"]
         ending_positions = meta_data["ending"]
 
-        # print(batch_model_outputs["logits"].shape)
         logits = batch_model_outputs["logits"].tolist()
 
         for i, endings in enumerate(ending_positions):
@@ -357,6 +355,96 @@ class ResponseProcessRewardPostProcessor(DistGatherMixin):
             "response": resp,
             "ending_logits": logits,
         } for prompt, i, resp, logits in zip(inputs, index, responses, ending_logits)])
+
+    def get_results(self, output_dir: str):
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        if dist.is_initialized():
+            output_file = os.path.join(output_dir, f"eval_predictions_rank{dist.get_rank()}.json")
+        else:
+            output_file = os.path.join(output_dir, "eval_predictions.json")
+
+        self.predictions = sorted(self.predictions, key=lambda x: x["index"])
+
+        for pred in self.predictions:
+            logits = torch.tensor(pred["ending_logits"])
+            probs = self.logit2prob(logits)
+            if self.reduction == "product":
+                pred["reward"] = probs.prod().item()
+            elif self.reduction == "min":
+                pred["reward"] = probs.min().item()
+            else:
+                raise ValueError(f"Unknown reduction: {self.reduction}")
+
+        json.dump(self.predictions, open(output_file, "w"), indent=2, ensure_ascii=False)
+
+        return {}, self.predictions
+
+
+class ResponseProcessRewardPostProcessorV2(DistGatherMixin):
+    def __init__(self, reduction: str = "product", prob_labels: str = "(2,3)"):
+        """
+        :param reduction: "product|min"
+        """
+        super().__init__()
+        self.predictions = []
+        self.reduction = reduction
+        self.prob_labels = eval(prob_labels)
+        logger.info(f"prob_labels: {self.prob_labels}")
+
+    def logit2prob(self, logits):
+        probs = torch.softmax(logits, dim=-1)
+        probs = probs[:, self.prob_labels].sum(dim=-1)
+        return probs
+
+    def __call__(self, meta_data: Dict[str, Any], batch_model_outputs: Dict[str, Any], ddp: bool = False):
+        index = meta_data["index"]
+        if isinstance(index, torch.Tensor):
+            index = index.tolist()
+        inputs = meta_data["prompt"]
+        responses = meta_data["response"]
+        ending_positions = meta_data["ending"]
+        types = meta_data["type"]
+
+        logits = batch_model_outputs["logits"].tolist()
+
+        for i, endings in enumerate(ending_positions):
+            tmp = len(process_response_v2(responses[i]))  # FIXED: @2024/01/06 for ReClor.
+            assert len(endings) == tmp, (len(endings), tmp, endings, responses[i])
+
+        ending_logits = []
+        assert len(ending_positions) == len(logits)
+        for endings, seq_logits in zip(ending_positions, logits):
+            try:
+                ending_logits.append([seq_logits[e] for e in endings])
+            except IndexError:
+                print(endings)
+                print(len(seq_logits))
+                raise
+
+        if ddp:
+            obj = [inputs, index, responses, ending_logits, types]
+            gather_res = self.gather_object(obj)
+            if dist.get_rank() == 0:
+                inputs = []
+                index = []
+                responses = []
+                ending_logits = []
+                types = []
+                for item in gather_res:
+                    inputs.extend(item[0])
+                    index.extend(item[1])
+                    responses.extend(item[2])
+                    ending_logits.extend(item[3])
+                    types.extend(item[4])
+
+        self.predictions.extend([{
+            "input": prompt,
+            "index": i,
+            "response": resp,
+            "ending_logits": logits,
+            "step_types": step_types,
+        } for prompt, i, resp, logits, step_types in zip(inputs, index, responses, ending_logits, types)])
 
     def get_results(self, output_dir: str):
         if not os.path.exists(output_dir):

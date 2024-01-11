@@ -12,27 +12,34 @@ hydra:
 train_file: ../research.data/reclor_data/train.json
 dev_file: ../research.data/reclor_data/val.json
 test_file: ${train_file}
+#test_file: ../research.data/reclor_data/val.json
 
 save_best: False
 exp_name:
 exp_notes:
 #output_dir: experiments/llama2.7b.chat.mixtral.dpo-sft.A100.40.w8.v1.0/checkpoint-1200/
-output_dir: experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.A100.w2.v1.0/checkpoint-2400/
+#output_dir: experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.A100.w2.v1.0/checkpoint-2400/  # @2024/01/10
+output_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w4.v1.0.th.s43/checkpoint-2000/  # @2024/01/11
 eval_sub_path:
+
+split_size: 2
+split_id: 0
+port: 6000
 
 #sampling_params:
 #  max_tokens: 3072
 gpu_memory_utilization: 0.95
 
 read_tensor:
-  split_size: -1
-  split_id: 0
+  split_size: ${split_size}
+  split_id: ${split_id}
   service_based: True
   service_processor:
     _target_: data.vllm.VLLMRequestGenerator
-    api_url: http://0.0.0.0:6000/v1/completions
+    api_url: http://0.0.0.0:${port}/v1/completions
     max_tokens: 3072
-    model: llama2-7b-reclor-distil
+#    model: llama2-7b-reclor-distil
+    model: llama2-7b-logiqa-step-dpo
     stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
 #    n: 20
     n: 10
@@ -41,7 +48,10 @@ read_tensor:
     temperature: 0.7
   flush_file: ${flush_file}
 
-output_file: ${output_dir}/reclor.react.train.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.json
+#output_file: ${output_dir}/reclor.react.train.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.json
+#output_file: ${output_dir}/reclor.react.dev.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.json  # @2024/01/10
+#output_file: ${output_dir}/reclor.react.train.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.${split_id}-of-${split_size}v1.0.json  # @2024/01/10
+output_file: ${output_dir}/reclor.react.train.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.${split_id}-of-${split_size}v1.0.json  # @2024/01/11
 flush_file: ${output_file}l
 
 # Dataloader

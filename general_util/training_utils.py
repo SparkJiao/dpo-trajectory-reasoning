@@ -5,6 +5,7 @@ from typing import Dict, List
 
 import hydra
 import numpy as np
+import omegaconf
 import torch
 import torch.distributed as dist
 from omegaconf import DictConfig
@@ -139,6 +140,8 @@ def load_and_cache_examples(cfg, tokenizer: PreTrainedTokenizer, _split="train",
 def organize_multiple_dataset(cfg, tokenizer: PreTrainedTokenizer, _split="train"):
     if "_target_" in cfg.train_file:
         files = hydra.utils.instantiate(cfg.train_file)
+    elif isinstance(cfg.train_file, omegaconf.ListConfig):
+        files = list(cfg.train_file)
     elif cfg.train_file.startswith("hf:"):
         files = [cfg.train_file[3:]]
     elif os.path.exists(cfg.train_file):

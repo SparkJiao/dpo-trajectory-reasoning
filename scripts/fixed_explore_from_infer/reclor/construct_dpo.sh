@@ -14,17 +14,37 @@ sft_model_dir=experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.A100.w2.v
 raw_data_file=$sft_model_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.json
 cleaned_data=$sft_model_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.json
 
+#python scripts/construct_dpo_data_from_react_response_v1.1.py \
+#  --input_file  $raw_data_file \
+#  --output_file $sft_model_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_dpo_pair_v1.1.no_duplicate.json
+## --output_file $sft_model_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_dpo_pair_v1.1.json
+#
+#rs=0.2
+#r=0.3
+#inter_file=$sft_model_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs${rs}.r${r}.json
+#python scripts/sample_react_inter_states_v2.2.py \
+#  --input_file $cleaned_data \
+#  --output_file $inter_file
+#
+#python scripts/split_train_dev.py \
+#  --input_file $inter_file
+
+#python scripts/construct_dpo_data_from_react_response_v1.1.py \
+#  --input_file ${sft_model_dir}/reclor.react.dev.0shot.sample10.tem0.7.v1.0.json \
+#  --output_file ${sft_model_dir}/reclor.react.dev.0shot.sample10.tem0.7.v1.0.clean_dpo_pair_v1.1.no_duplicate.json
+
+#python scripts/construct_dpo_data_from_react_response_v1.1.py \
+#  --input_file "${sft_model_dir}/reclor.react.train.0shot.sample20.tem0.7.?-of-2v1.0.json" \
+#  --output_file ${sft_model_dir}/reclor.react.train.0shot.sample20.tem0.7.v1.0.clean_dpo_pair_v1.1.no_duplicate.json
+
 python scripts/construct_dpo_data_from_react_response_v1.1.py \
-  --input_file  $raw_data_file \
-  --output_file $sft_model_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_dpo_pair_v1.1.no_duplicate.json
-# --output_file $sft_model_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_dpo_pair_v1.1.json
+  --input_file "${sft_model_dir}/response30merge/reclor.react.train.0shot.resp30merge.tem0.7.v1.0.json" \
+  --output_file ${sft_model_dir}/response30merge/reclor.react.train.0shot.resp30merge.tem0.7.v1.0.clean_dpo_pair_v1.1.no_duplicate.json
 
-rs=0.2
-r=0.3
-inter_file=$sft_model_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs${rs}.r${r}.json
-python scripts/sample_react_inter_states_v2.2.py \
-  --input_file $cleaned_data \
-  --output_file $inter_file
+#4638
+#Clean: 4638 -> 4638
+#Average response number: 19.22013799051315
+#55534
+#278859
+#{'invalid': 0, 'missing': 124, 'multiple': 59, 'wrong': 33426}
 
-python scripts/split_train_dev.py \
-  --input_file $inter_file

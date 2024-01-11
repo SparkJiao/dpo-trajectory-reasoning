@@ -23,6 +23,9 @@ output_dir: experiments/${exp_name}
 data_dir: experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.A100.w2.v1.0/checkpoint-2400/
 
 sample_num: 3
+split_size: 2
+split_id: 0
+port: 6000
 
 #output_file: ${data_dir}/logiqav2-train.react.v1.0.0shot.sample5.inter_ver2.0.rs0.4.r0.3.sample3.json
 #output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.inter_ver2.0.rs0.2.r0.3.sample5.${read_tensor.split_id}-of-${read_tensor.split_size}.json
@@ -30,7 +33,9 @@ sample_num: 3
 #output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sample${sample_num}.json
 #output_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.1000.sample${sample_num}.json
 #output_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_dev.500.sample${sample_num}.tem${read_tensor.service_processor.temperature}.json
-output_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_dev.38.sample${sample_num}.tem${read_tensor.service_processor.temperature}.json
+#output_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_dev.38.sample${sample_num}.tem${read_tensor.service_processor.temperature}.json
+#output_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_train.4100.sub_dev.1000.sample${sample_num}.tem${read_tensor.service_processor.temperature}.${split_id}-of-${split_size}.json
+output_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_train.4100.sub_train.3100.sample${sample_num}.tem${read_tensor.service_processor.temperature}.${split_id}-of-${split_size}.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -47,20 +52,22 @@ read_tensor:
 #    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.json  # Fix @ 2024/01/06
 #    inter_states_file: ${data_dir}/reclor.train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.sub_train.sub_dev.1000.json  # Fix @ 2024/01/06
 #    inter_states_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_dev.500.json  # Add new column @ 2024/01/08
-    inter_states_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_dev.38.json  # Add new column @ 2024/01/08
+#    inter_states_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_dev.38.json  # Add new column @ 2024/01/08
+#    inter_states_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_train.4100.sub_dev.1000.json  # Add new column @ 2024/01/09
+    inter_states_file: ${data_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.clean_inter_ver2.2.rs0.2.r0.3.sub_train.4138.sub_train.4100.sub_train.3100.json  # Add new column @ 2024/01/10
   template_id: 9
   instruction:
     _target_: data.prompts.logiqav2.react.prompts.get_prompt
     prompt_name: react_v2
   compose_keys: [ "context", "question", "option_list", "response" ]
   max_data_num: -1
-  split_size: -1
-  split_id: 0
+  split_size: ${split_size}
+  split_id: ${split_id}
   api_based: False
   service_based: True
   service_processor:
     _target_: data.vllm.VLLMRequestGenerator
-    api_url: http://0.0.0.0:6000/v1/completions
+    api_url: http://0.0.0.0:${port}/v1/completions
 #    max_tokens: 3072
     max_tokens: 2048
     model: llama2-7b-reclor-distil

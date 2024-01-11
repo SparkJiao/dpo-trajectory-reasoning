@@ -31,8 +31,8 @@ class ARLSATReader:
                     if x == q["answer"]:
                         ordered_label = i
 
-                if "Test" not in file:
-                    assert ordered_label != -1
+                # if "Test" not in file:
+                assert ordered_label != -1, (q["answer"], q["options"], x)
 
                 all_label.append(ordered_label)
                 all_option_list.append(options)

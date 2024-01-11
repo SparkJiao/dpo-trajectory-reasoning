@@ -149,17 +149,13 @@ def main():
     for item in data:
         chosen_responses, pos_response_rewards, reject_responses, correct_num = best_of_n_filter(item, args.best_of, response2reward)
         for chosen in chosen_responses:
-            for reject in reject_responses[:args.max_neg_num]:
-                filtered.append({
-                    "chosen": chosen,
-                    "reject": reject,
-                    "id": item["id"],
-                    "is_full": True,
-                    "chosen_full_rewards": response2full_rewards[chosen],
-                    "reject_full_rewards": response2full_rewards[reject],
-                    "chosen_reward": response2reward[chosen],
-                    "reject_reward": response2reward[reject],
-                })
+            # for reject in reject_responses[:args.max_neg_num]:
+            #     filtered.append({
+            #         "chosen": chosen,
+            #         "reject": reject,
+            #         "id": item["id"],
+            #         "is_full": True,
+            #     })
             if args.min_pos_step > 0 and len(chosen.split("\n")) < args.min_pos_step:
                 continue
             for pos_id, pos_reward in pos_response_rewards:

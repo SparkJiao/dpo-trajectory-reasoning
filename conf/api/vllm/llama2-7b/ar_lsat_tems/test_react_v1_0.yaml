@@ -1,7 +1,8 @@
 defaults:
   - hydra: default
-  - reader/logiqav2@read_tensor: react_service_1shot_v1_0
+  - reader/logiqav2@read_tensor: react_service_0shot_v1_0
   - post_process: openai_react
+  - api/vllm/vllm_params@sampling_params: sampling_param_greedy
   - _self_
 
 hydra:
@@ -12,11 +13,13 @@ train_file: ../research.data/AR-LSAT/data/AR_TrainingData.json
 dev_file: ../research.data/AR-LSAT/data/AR_DevelopmentData.json
 test_file: ../research.data/AR-LSAT/data/AR_TestData.json
 
-port: 8000
-model: llama-2-70b-chat
+save_best: False
+exp_name:
+exp_notes:
+output_dir: experiments/${exp_name}
 
-output_file: ../pretrained-models/Llama-2-70b-chat-hf/ar-lsat.react.dev.1shot.v1.1.json
-flush_file: ${output_file}l
+step: 800
+eval_sub_path: checkpoint-${step}
 
 # Data loading
 read_tensor:
@@ -24,9 +27,15 @@ read_tensor:
     _target_: data.ar_lsat.ARLSATReader
     flat_options: True
     option_order: "ABCDE"
-  few_shot_prompt:
-    _target_: data.logiqav2.read_single_file
-    file_path: data/prompts/ar_lsat/react/train_200006_1-G_1_1.txt
+  template_id: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
+  service_based: False
+  service_processor:
+
+sampling_params:
+  max_tokens: 3072
+
+output_file: ${output_dir}/${eval_sub_path}/ar-lsat.test.react.v1.0.0shot.json
+flush_file: ${output_file}l
 
 post_process:
   answer_clean:
@@ -36,8 +45,6 @@ post_process:
 # Dataloader
 num_workers: 32
 prefetch_factor: 2
-
-output_dir:
 
 
 # Training hyper-parameters
@@ -50,6 +57,8 @@ seed: 42
 local_rank: -1
 
 # Temporary variables
+fp16: True
+fp16_bfloat16: True
 n_gpu: 1
 device:
 train_batch_size:

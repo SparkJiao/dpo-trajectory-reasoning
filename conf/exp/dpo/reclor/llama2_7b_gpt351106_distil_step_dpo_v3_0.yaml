@@ -1,7 +1,7 @@
 defaults:
   - hydra: default
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero1
-  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
+  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload_lr
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero2
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
 
@@ -10,7 +10,7 @@ hydra:
     - file://conf/
 
 sft_model_dir: experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.A100.w2.v1.0/checkpoint-2400
-train_file: ${sft_model_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v10_cp800_best_of_10.neg10.pos0.7.v2.2.(2,3).pair.product.full_only.json
+train_file: ${sft_model_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v13_400_best_of_10.neg10.pos0.3.v2.2.(1,2,3).pair.min.pos_only.json
 dev_file:
 test_file:
 
@@ -72,11 +72,12 @@ num_workers: 8
 prefetch_factor: 2
 
 # Wiki path pretrain v8.2
-model_name_or_path: ${sft_model_dir}
+#model_name_or_path: ${sft_model_dir}
+model_name_or_path: experiments/llama2.7b.chat.reclor.gpt351106.dpo.fix_hack.H100.w4.v1.0.s42/checkpoint-800
 pretrain:
 
 
-exp_name: llama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.H100.w2.v1.1.s${seed}
+exp_name: llama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.A100.w2.v3.0.s${seed}
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -89,11 +90,11 @@ eval_sub_path: checkpoint-100
 
 # Training hyper-parameters
 per_gpu_train_batch_size: 4  # H100
-per_gpu_eval_batch_size: 8
+per_gpu_eval_batch_size: 4
 #learning_rate: 1e-4
-#learning_rate: 5e-6
-learning_rate: 2e-6
-gradient_accumulation_steps: 4
+learning_rate: 5e-7
+#learning_rate: 1e-6
+gradient_accumulation_steps: 8
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"
@@ -104,7 +105,7 @@ max_grad_norm: 1.0
 num_train_epochs: 2
 max_steps: 0
 warmup_proportion: 0
-warmup_steps: 200
+warmup_steps: 0
 
 # Optimizer
 optimizer:
@@ -113,9 +114,9 @@ bit_training:
 
 logging_steps: 5
 save_ds_state: False
-save_steps: 200
+save_steps: 50
 save_best: False
-eval_steps: 200
+eval_steps: 50
 ddp_eval: True
 no_cuda: False
 seed: 42

@@ -1,7 +1,7 @@
 defaults:
   - hydra: default
-#  - deepspeed@ds_cfg: train_hybrid_engine_zero1
-  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
+  - deepspeed@ds_cfg: train_hybrid_engine_zero1
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero2
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
 
@@ -76,7 +76,7 @@ model_name_or_path: ${sft_model_dir}
 pretrain:
 
 
-exp_name: llama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.H100.w2.v1.1.s${seed}
+exp_name: llama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.H100.w8.v1.6.s${seed}
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -88,11 +88,11 @@ do_eval: False
 eval_sub_path: checkpoint-100
 
 # Training hyper-parameters
-per_gpu_train_batch_size: 4  # H100
-per_gpu_eval_batch_size: 8
+per_gpu_train_batch_size: 2  # H100
+per_gpu_eval_batch_size: 4
 #learning_rate: 1e-4
-#learning_rate: 5e-6
-learning_rate: 2e-6
+learning_rate: 5e-7
+#learning_rate: 1e-6
 gradient_accumulation_steps: 4
 weight_decay: 0.01
 adam_epsilon: 1e-6
@@ -101,7 +101,7 @@ adam_betas: "(0.9, 0.98)"
 #max_grad_norm: 0.0
 total_dataset_len: -1
 max_grad_norm: 1.0
-num_train_epochs: 2
+num_train_epochs: 6
 max_steps: 0
 warmup_proportion: 0
 warmup_steps: 200
