@@ -41,7 +41,9 @@ def clean_react_response(response: str):
         new_lines.append(line)
         if "Finish[The answer is" in line and line.startswith("Action "):
             break
-    assert "Finish[The answer is" in new_lines[-1] and new_lines[-1].startswith("Action "), new_lines
+    # assert "Finish[The answer is" in new_lines[-1] and new_lines[-1].startswith("Action "), (new_lines, lines)
+    if "Finish[The answer is" not in new_lines[-1] or not new_lines[-1].startswith("Action "):
+        return None
     response = "\n".join(new_lines)
     response = response.strip()
     return response
@@ -74,6 +76,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str)
     parser.add_argument("--output_file", type=str)
+    parser.add_argument("--min_step", type=int, default=0)
     args = parser.parse_args()
 
     if os.path.exists(args.input_file):
@@ -84,7 +87,6 @@ def main():
     data = []
     for file in files:
         data.extend(json.load(open(file)))
-    # data = json.load(open(args.input_file))
     print(len(data))
 
     cleaned_data = []
@@ -100,6 +102,8 @@ def main():
         for res, pred in zip(response, preds):
             res = clean_react_response(res)
             if res is None:
+                continue
+            if len(res.split("\n")) < args.min_step:
                 continue
             if res not in new_responses:
                 new_responses.append(res)

@@ -757,7 +757,7 @@ def extract_react_ending_positions_v2(tokenizer: PreTrainedTokenizer, response: 
     endings = []
     ending_types = []
     resp_start = False
-    for step_id, step in steps:
+    for i, (step_id, step) in enumerate(steps):
         if not resp_start:
             if step.startswith("Thought 1:"):
                 resp_start = True
@@ -766,7 +766,7 @@ def extract_react_ending_positions_v2(tokenizer: PreTrainedTokenizer, response: 
         partial_traj = "\n".join(raw_lines[:(step_id + 1)])
         input_ids = tokenizer(partial_traj, truncation=True, max_length=max_seq_length)["input_ids"]
         endings.append(len(input_ids) - 1)
-        ending_types.append(step_types[step_id])
+        ending_types.append(step_types[i])
 
     assert resp_start, response
     assert len(endings) > 0, (response, steps)
@@ -814,7 +814,7 @@ class CompleteTrajStepRewardCollator:
                 ending = [e + padding_len[b].item() for e in ending]
             endings.append(ending)
             step_types.append(ending_types)
-            assert len(step_types) == len(ending), (step_types, ending)
+        assert len(step_types) == len(endings), (step_types, endings)
 
         encoded_inputs["labels"] = labels
         encoded_inputs["meta_data"] = {
