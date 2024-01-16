@@ -22,7 +22,7 @@ dev_inter_states_file: ${sft_model_dir}/reclor.react.train.0shot.sample10.tem0.7
 
 train_file: ${train_attempt_response_file}
 dev_file: ${dev_attempt_response_file}
-test_file: ${sft_model_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.json
+test_file: ${sft_model_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.min_step_0.json
 
 torch_dtype:
   _target_: general_util.training_utils.return_torch_dtype
@@ -171,7 +171,7 @@ eval_forward_fn:
   _target_: general_util.evaluator.DefaultForwardFn
 post_process:
   _target_: post_processors.dpo.ResponseProcessRewardPostProcessorV2
-predict_dir: ${output_dir}/train.reclor.rewards.raw_trajectory.product.v1.1  # @ 2024/01/12
+predict_dir: ${output_dir}/train.reclor.rewards.raw_trajectory.product.min_step_0.v1.1  # @ 2024/01/12
 
 ds_cfg:
   train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}

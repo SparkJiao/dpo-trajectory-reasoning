@@ -1,18 +1,17 @@
 defaults:
   - hydra: default
-  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
 #  - deepspeed@ds_cfg: train_hybrid_engine_zero1
-#  - deepspeed@ds_cfg: train_hybrid_engine_zero2_optim_offload
+  - deepspeed@ds_cfg: train_hybrid_engine_zero1_optim_offload
+#  - deepspeed@ds_cfg: train_hybrid_engine_zero2
   - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
 
 hydra:
   searchpath:
     - file://conf/
 
-sft_model_dir: experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/
-fix_hack_data_dir: ${sft_model_dir}/fix_hack_data_dir/
-train_file: ${fix_hack_data_dir}/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_dpo_pair.json  # 132458
-dev_file: ${fix_hack_data_dir}/logiqav2-train.full.qa.react.v1.0.0shot.sample10.clean_dpo_pair.sub_dev.json  # 1000
+sft_model_dir: experiments/llama2.7b.chat.reclor.gpt35turbo1106.dpo-sft.H100.w4.v2.0/checkpoint-1200/
+train_file: ${sft_model_dir}/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v20_cp400_best_of_10.neg10.pos0.45.v2.2.1.(2,3).pair.min.min_step_8.json
+dev_file:
 test_file:
 
 torch_dtype:
@@ -32,33 +31,31 @@ model:
   beta: 0.1
   gradient_checkpointing: True
   pad_token_id: 0
-  use_flash_attention_2: True
+  attn_implementation: "flash_attention_2"
   torch_dtype: ${torch_dtype}
   device_map: ${device_map}
   ref_model:
     _target_: transformers.models.llama.LlamaForCausalLM.from_pretrained
     pretrained_model_name_or_path: ${model_name_or_path}
     torch_dtype: ${torch_dtype}
-    use_flash_attention_2: True
+    attn_implementation: "flash_attention_2"
     pad_token_id: 0
     device_map: ${device_map}
+#    load_in_8bit: True  # 8-bit cannot use on H100
 
 
 # Data loading
 read_tensor:
   _target_: data.dpo.DPOMergeDataset
-  original_data_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+  original_data_file: ../research.data/reclor_data/train.json
   original_reader:
-    _target_: data.logiqav2.LogicQAReader
+    _target_: data.reclor.ReClorReader
     flat_options: True
   instruction:
     _target_: data.prompts.logiqav2.react.prompts.get_prompt
     prompt_name: react_v2
   template: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
   compose_keys: [ "context", "question", "option_list" ]
-  format_filter:
-    _target_: data.dpo.ReActFormat
-
 
 dist_load_data_barrier: False
 
@@ -78,8 +75,8 @@ prefetch_factor: 2
 model_name_or_path: ${sft_model_dir}
 pretrain:
 
-exp_name: llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.A100.w2.v1.0.th.test.s${seed}
-#exp_name: llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.H100.w4.v1.0.th.test.s${seed}
+
+exp_name: llama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.H100.w2.v5.5.3.s${seed}
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -92,12 +89,16 @@ eval_sub_path: checkpoint-100
 
 # Training hyper-parameters
 per_gpu_train_batch_size: 4  # H100
-per_gpu_eval_batch_size: 8
-learning_rate: 2e-6
+per_gpu_eval_batch_size: 4
+#learning_rate: 1e-4
+#learning_rate: 5e-7
+learning_rate: 1e-6
 gradient_accumulation_steps: 8
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"
+#adam_betas: "(0.9, 0.999)"
+#max_grad_norm: 0.0
 total_dataset_len: -1
 max_grad_norm: 1.0
 num_train_epochs: 2
@@ -112,9 +113,9 @@ bit_training:
 
 logging_steps: 5
 save_ds_state: False
-save_steps: 400
+save_steps: 200
 save_best: False
-eval_steps: 400
+eval_steps: 200
 ddp_eval: True
 no_cuda: False
 seed: 42

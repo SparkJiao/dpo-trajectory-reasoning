@@ -69,6 +69,7 @@ def evaluate(cfg: DictConfig, model: vllm.LLM, prefix="", _split="dev"):
         all_meta_data.append(inputs.pop("meta_data"))
 
     sampling_params: SamplingParams = hydra.utils.instantiate(cfg.sampling_params)
+    logger.warning(f"Sampling params: {sampling_params}")
 
     outputs: List[RequestOutput] = model.generate(all_prompts, sampling_params)
     if len(outputs) != len(all_meta_data):
@@ -161,8 +162,8 @@ def main(cfg: DictConfig):
 
         model = vllm.LLM(model=checkpoint,
                          tensor_parallel_size=cfg.n_gpu,
-                         swap_space=getattr(cfg, "swap_space", 4),
-                         gpu_memory_utilization=getattr(cfg, "gpu_memory_utilization", 0.9),
+                         swap_space=getattr(cfg, "swap_space", 32),
+                         gpu_memory_utilization=getattr(cfg, "gpu_memory_utilization", 0.95),
                          load_format=getattr(cfg, "load_format", "auto"),)
 
         if cfg.test_file:

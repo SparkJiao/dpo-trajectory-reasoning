@@ -110,6 +110,7 @@ def main():
         files = [args.input_file]
     else:
         files = glob(args.input_file)
+    print(files)
     data = []
     for file in files:
         data += json.load(open(file, "r"))
@@ -186,6 +187,7 @@ def main():
         if correct_num < args.best_of:
             reduced += 1
 
+    print("Contrastive pairs: ", len(filtered))
     print("Positive pairs", len(pos2pos))
     pos2pos = pos2pos * args.up_sampling
     filtered = pos2pos + filtered

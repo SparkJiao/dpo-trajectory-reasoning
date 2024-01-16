@@ -48,16 +48,60 @@ best_of=10
 #pos_margin=0.85
 #pos_margin=0.6
 pos_margin=0.4
+#pos_margin=0.5
 max_neg_num=10
 index="(2,3)"
 reduction="product"
-reward_file="experiments/llama2.7b.chat.reclor.gpt351106.prm.fix_hack.H100.w8.v2.0.s42/train.reclor.rewards.raw_trajectory.product.v1.1/test-checkpoint-400/eval_predictions_rank0.json"
+reward_file="experiments/llama2.7b.chat.reclor.gpt351106.prm.fix_hack.H100.w8.v2.0.s42/train.reclor.rewards.raw_trajectory.product.min_step_0.v1.1/test-checkpoint-400/eval_predictions_rank0.json"
+#python scripts/best_of_filter_by_reward_v2.2.1.py \
+#  --input_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.json" \
+#  --reward_file $reward_file \
+#  --output_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v20_cp400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.1.${index}.pair.${reduction}.full_only.json" \
+#  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
+min_step=8  # Add min step constraint. @ 2024/01/13
 python scripts/best_of_filter_by_reward_v2.2.1.py \
-  --input_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.json" \
+  --input_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.min_step_$min_step.json" \
   --reward_file $reward_file \
-  --output_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v20_cp400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.1.${index}.pair.${reduction}.full_only.json" \
+  --output_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v20_cp400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.1.${index}.pair.${reduction}.min_step_$min_step.json" \
   --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
+#min_step=0  # Add min step constraint. @ 2024/01/13
+#python scripts/best_of_filter_by_reward_v2.2.1.py \
+#  --input_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.min_step_$min_step.json" \
+#  --reward_file $reward_file \
+#  --output_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v20_cp400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.1.${index}.pair.${reduction}.min_step_$min_step.json" \
+#  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
 
+#best_of=10
+##pos_margin=0.45
+#pos_margin=0.4
+##pos_margin=0.5
+#max_neg_num=10
+##index="(2,3)"
+#index="(1,2,3)"
+#reduction="min"
+#reward_file="experiments/llama2.7b.chat.reclor.gpt351106.prm.fix_hack.H100.w8.v2.0.s42/train.reclor.rewards.raw_trajectory.product.min_step_0.v1.1/test-checkpoint-400/eval_predictions_rank0.json"
+#min_step=8  # Add min step constraint. @ 2024/01/13
+#python scripts/best_of_filter_by_reward_v2.2.1.py \
+#  --input_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.min_step_$min_step.json" \
+#  --reward_file $reward_file \
+#  --output_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v20_cp400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.1.${index}.pair.${reduction}.min_step_$min_step.json" \
+#  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction
+#
+#best_of=10
+##pos_margin=0.45
+#pos_margin=0.4
+##pos_margin=0.5
+#max_neg_num=10
+#index="(2,3)"
+##index="(1,2,3)"
+#reduction="min"
+#reward_file="experiments/llama2.7b.chat.reclor.gpt351106.prm.fix_hack.H100.w8.v2.0.s42/train.reclor.rewards.raw_trajectory.product.min_step_0.v1.1/test-checkpoint-400/eval_predictions_rank0.json"
+#min_step=8  # Add min step constraint. @ 2024/01/13
+#python scripts/best_of_filter_by_reward_v2.2.1.py \
+#  --input_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.cleaned.min_step_$min_step.json" \
+#  --reward_file $reward_file \
+#  --output_file "$data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.prm_v20_cp400_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.1.${index}.pair.${reduction}.min_step_$min_step.up5.json" \
+#  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels ${index} --reduction $reduction --up_sampling 5
 
 
 # Positive pairs only.

@@ -157,7 +157,7 @@ def main():
     print(logs)
 
     save_dir = os.path.dirname(args.output_file)
-    cleaned_data_save_path = os.path.join(save_dir, args.input_file.split("/")[-1].replace(".json", ".cleaned.json"))
+    cleaned_data_save_path = os.path.join(save_dir, args.input_file.split("/")[-1].replace(".json", f".cleaned.min_step_{args.min_step}.json"))
     json.dump(cleaned_data, open(cleaned_data_save_path, "w"), indent=2, ensure_ascii=False)
     json.dump(outputs, open(args.output_file, "w"), indent=2, ensure_ascii=False)
     json.dump(all_chosen_data, open(args.output_file.replace(".json", ".chosen.json"), "w"), indent=2, ensure_ascii=False)

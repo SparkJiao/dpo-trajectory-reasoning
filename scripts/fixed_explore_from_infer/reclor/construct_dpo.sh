@@ -19,10 +19,16 @@ min_step=8
 #  --output_file $data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.sub_train.3638.sub_dev.200.inter_ver2.3.rs${rs}.r${r}.min_step_${min_step}.no_act.json \
 #  --ratio_s $rs --ratio $r --min_step $min_step --remove_action --split_num 2
 
+min_step=0
 python scripts/construct_dpo_data_from_react_response_v1.1.py \
   --input_file $data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.json \
-  --output_file $data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.min_step_8.dpo_pair.json \
-  --min_step 8
+  --output_file $data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.min_step_$min_step.dpo_pair.json \
+  --min_step $min_step
+min_step=8
+python scripts/construct_dpo_data_from_react_response_v1.1.py \
+  --input_file $data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.json \
+  --output_file $data_dir/reclor.react.train.0shot.sample10.tem0.7.v1.0.min_step_$min_step.dpo_pair.json \
+  --min_step $min_step
 
 ####################################################
 
