@@ -198,9 +198,11 @@ data_dir=experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.
 
 best_of=10
 #pos_margin=0.5
-pos_margin=0.7
+#pos_margin=0.7
+pos_margin=0.3
 max_neg_num=10
-index="(1,2,3)"
+#index="(1,2,3)"
+index="(2,3)"
 reduction="product"
 up_sampling=1
 rm_step=800
