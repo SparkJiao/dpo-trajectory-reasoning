@@ -106,7 +106,7 @@ def process_response_v2(response: str):
         if item[1].startswith("Thought "):
             content = item[1][len("Thought "):]
             content = content.strip()
-            if len(content) >= 5:
+            if len(content) >= 5 or item[1].startswith("Thought 1:"):  # FIXED: Hack for LogiQA-v2 reward model evaluation, where the responses are not cleaned. @2024/01/18.
                 outputs.append(item)
                 types.append("Thought")
         elif item[1].startswith("Action "):
@@ -621,6 +621,8 @@ class Attempt2ValueRewardModelingDatasetV2(ComposeDatasetMixin):
 class CompleteTrajRewardModelingDataset(ComposeDatasetMixin):
     """
     This dataset only loads the complete trajectory.
+
+    This dataset can also be used for training.
     """
 
     def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer,
@@ -648,6 +650,7 @@ class CompleteTrajRewardModelingDataset(ComposeDatasetMixin):
         original_data = original_reader(original_data_file)
         data = []
         abandoned = []
+        logs = {}
         for i, item in enumerate(original_data):
             if "index" in item:
                 item_id = item["index"]
@@ -663,9 +666,11 @@ class CompleteTrajRewardModelingDataset(ComposeDatasetMixin):
                         new_item = copy.deepcopy(item)
                         new_item["response"] = full_response
                         new_item["index"] = item_id if not re_index else len(data)
+                        new_item["value"] = parse_leaf_node_value(full_response, item["label"], logs)
                         data.append(new_item)
 
         logger.info(f"Attempt2ValueRewardModelingDataset: {len(data)} / {len(original_data)}")
+        logger.info(logs)
         self.data: List[Dict[str, Any]] = data
         self.template = template
         self.instruction = instruction
@@ -687,6 +692,7 @@ class CompleteTrajRewardModelingDataset(ComposeDatasetMixin):
             "response": item["response"],
             "input": _input,
             "index": item["index"],
+            "value": item["value"],
         }
 
 

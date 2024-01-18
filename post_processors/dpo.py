@@ -274,7 +274,7 @@ def process_response_v2(response: str):
         if item[1].startswith("Thought "):
             content = item[1][len("Thought "):]
             content = content.strip()
-            if len(content) >= 5:
+            if len(content) >= 5 or item[1].startswith("Thought 1:"):  # FIXED: Hack for LogiQA-v2 reward model evaluation, where the responses are not cleaned. @2024/01/18.
                 outputs.append(item)
         elif item[1].startswith("Action "):
             content = item[1][len("Action "):]
@@ -322,8 +322,9 @@ class ResponseProcessRewardPostProcessor(DistGatherMixin):
 
         for i, endings in enumerate(ending_positions):
             # tmp = len(process_response("Thought 1: " + responses[i]))
-            tmp = len(process_response_v2(responses[i]))  # FIXED: @2024/01/06 for ReClor.
-            assert len(endings) == tmp, (len(endings), tmp, endings, responses[i])
+            tmp = inputs[i] + responses[i]
+            tmp = len(process_response_v2(tmp[tmp.find("Thought 1:"):]))  # FIXED: @2024/01/06 for ReClor.
+            assert len(endings) == tmp, (len(endings), tmp, endings, responses[i], inputs[i])
 
         ending_logits = []
         assert len(ending_positions) == len(logits)
@@ -409,8 +410,9 @@ class ResponseProcessRewardPostProcessorV2(DistGatherMixin):
         logits = batch_model_outputs["logits"].tolist()
 
         for i, endings in enumerate(ending_positions):
-            tmp = len(process_response_v2(responses[i]))  # FIXED: @2024/01/06 for ReClor.
-            assert len(endings) == tmp, (len(endings), tmp, endings, responses[i])
+            tmp = inputs[i] + responses[i]
+            tmp = len(process_response_v2(tmp[tmp.find("Thought 1:"):]))  # FIXED: @2024/01/06 for ReClor.
+            assert len(endings) == tmp, (len(endings), tmp, endings, responses[i], inputs[i])
 
         ending_logits = []
         assert len(ending_positions) == len(logits)

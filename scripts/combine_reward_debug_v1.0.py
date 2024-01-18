@@ -11,6 +11,8 @@ import torch
 def logit2prob(logits, prob_labels=(3,)):
     probs = torch.softmax(logits, dim=-1)
     # Sum the probabilities along the `prob_labels`.
+    if len(probs.shape) == 1:
+        return probs[prob_labels].sum()
     return probs[:, prob_labels].sum(dim=-1)
 
 
@@ -98,6 +100,7 @@ def main():
     parser.add_argument("--remove_last", default=False, action="store_true")
     parser.add_argument("--prob_labels", type=str, default="(3,)", help="The labels to compute the probability.")
     parser.add_argument("--remove_action", default=False, action="store_true")
+    parser.add_argument("--orm", default=False, action="store_true")
     args = parser.parse_args()
     print(args.reduction)
     print(args.prob_labels)
@@ -121,7 +124,10 @@ def main():
         if item["response"] in response2reward:
             duplicates.add(item["response"])
             cnt += 1
-        logits = torch.tensor(item["ending_logits"])
+        if args.orm:
+            logits = torch.tensor(item["logits"])
+        else:
+            logits = torch.tensor(item["ending_logits"])
         probs = logit2prob(logits, prob_labels=args.prob_labels)
 
         if args.remove_action:
@@ -133,7 +139,9 @@ def main():
 
         if args.remove_last:
             probs = probs[:-1]
-        if args.reduction == "product":
+        if args.orm:
+            response2reward[item["response"]] = probs.item()
+        elif args.reduction == "product":
             response2reward[item["response"]] = probs.prod().item()
         elif args.reduction == "sum":
             response2reward[item["response"]] = probs.sum().item()

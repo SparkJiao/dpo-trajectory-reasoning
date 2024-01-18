@@ -81,7 +81,8 @@ model_name_or_path: ${sft_model_dir}
 pretrain:
 
 #exp_name: llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.A100.w2.v1.0.th.test.s${seed}
-exp_name: llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.H100.w2.v1.0.th.test.ratio${ratio}.s${seed}
+#exp_name: llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.H100.w2.v1.0.th.test.ratio${ratio}.s${seed}
+exp_name: llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.H100.w4.v1.0.th.test.ratio${ratio}.s${seed}
 exp_notes:
 output_dir: experiments/${exp_name}
 
@@ -96,7 +97,7 @@ eval_sub_path: checkpoint-100
 per_gpu_train_batch_size: 4  # H100
 per_gpu_eval_batch_size: 8
 learning_rate: 2e-6
-gradient_accumulation_steps: 8
+gradient_accumulation_steps: 4
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"
