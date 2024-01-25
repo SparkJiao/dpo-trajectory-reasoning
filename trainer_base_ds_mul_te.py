@@ -42,6 +42,12 @@ from general_util.training_utils import batch_to_device, unwrap_model, set_seed,
 
 logger: logging.Logger
 
+try:
+    import transformer_engine.pytorch as transformer_engine
+    from transformer_engine.common import recipe
+except ImportError:
+    pytest.skip("Transformer Engine package is missing, skipping tests", allow_module_level=True)
+
 torch.backends.cuda.matmul.allow_tf32 = True
 
 GLOBAL_SEED = 1
@@ -97,8 +103,13 @@ def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine]
             dist.barrier()
 
 
-def forward_step(model, inputs: Dict[str, torch.Tensor]):
-    outputs = model(**inputs)
+def forward_step(model, inputs: Dict[str, torch.Tensor], fp8_recipe: recipe.DelayedScaling = None):
+    if fp8_recipe is not None:
+        # Enables autocasting for the forward pass
+        with transformer_engine.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe):
+            outputs = model(**inputs)
+    else:
+        outputs = model(**inputs)
     if isinstance(outputs, tuple):
         loss = outputs[0]
     else:
@@ -124,6 +135,18 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
 
     if getattr(cfg, "do_preprocess", False):
         return
+
+    if getattr(cfg, "fp8", False):
+        fp8_recipe = recipe.DelayedScaling(fp8_format=recipe.Format.HYBRID,
+                                           amax_history_len=getattr(cfg, "fp8_amax_history_len", 16),
+                                           amax_compute_algo=getattr(cfg, "fp8_amax_compute_algo", "max"))
+
+        from general_util.transformer_engine import convert_model
+        logger.info("Converting model to transformer_engine...")
+
+        convert_model(model, to_transformer_engine=True, _convert_linear=True, _convert_ln=True)
+    else:
+        fp8_recipe = None
 
     if "extended_vocab" in cfg and cfg.extended_vocab:
         logger.info(f"Extended extra vocab size: {cfg.extended_vocab}")
@@ -221,7 +244,7 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
                 model.train()
                 batch = batch_to_device(batch, cfg.device)
 
-                loss, outputs = forward_step(model, batch)
+                loss, outputs = forward_step(model, batch, fp8_recipe=fp8_recipe)
                 loss /= cfg.gradient_accumulation_steps
 
                 if tb_helper is not None:

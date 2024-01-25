@@ -9,7 +9,10 @@ def main():
     parser.add_argument("--input_file", type=str, required=True)
     parser.add_argument("--output_file", type=str, required=True)
     parser.add_argument("--ratio", type=float, required=True)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
+
+    random.seed(args.seed)
 
     data = json.load(open(args.input_file, "r"))
     print(len(data))
@@ -26,7 +29,7 @@ def main():
         sampled_data.extend(id2samples[sample_id])
     print(len(sampled_data))
 
-    json.dump(sampled_data, open(args.output_file, "w"), indent=2)
+    json.dump(sampled_data, open(args.output_file.replace(".json", f".{args.seed}.json"), "w"), indent=2)
 
 
 if __name__ == "__main__":

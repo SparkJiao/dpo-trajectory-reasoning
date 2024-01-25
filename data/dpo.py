@@ -453,9 +453,10 @@ class DPOMergeParallelDataset(DPOMergeBalanceDataset):
 
 
 class DPOCollator:
-    def __init__(self, tokenizer: PreTrainedTokenizer, max_seq_length: int):
+    def __init__(self, tokenizer: PreTrainedTokenizer, max_seq_length: int, padding: str = "longest"):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
+        self.padding = padding
 
     def __call__(self, batch):
         chosen = [item["chosen"] for item in batch]
@@ -477,10 +478,10 @@ class DPOCollator:
         # prompt = [item["prompt"] for item in batch]
         # text_prompts = prompt + prompt
 
-        encoded_prompts = self.tokenizer(text_prompts, padding="longest", truncation=True, max_length=self.max_seq_length, return_tensors="pt")
+        encoded_prompts = self.tokenizer(text_prompts, padding=self.padding, truncation=True, max_length=self.max_seq_length, return_tensors="pt")
         input_lens = torch.sum(encoded_prompts["attention_mask"], dim=-1)
 
-        encoded_inputs = self.tokenizer(text_inputs, padding="longest", truncation=True, max_length=self.max_seq_length, return_tensors="pt")
+        encoded_inputs = self.tokenizer(text_inputs, padding=self.padding, truncation=True, max_length=self.max_seq_length, return_tensors="pt")
         if self.tokenizer.padding_side == "left":
             padding_len = torch.sum(1 - encoded_inputs["attention_mask"], dim=-1)
             input_lens = input_lens + padding_len

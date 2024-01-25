@@ -46,8 +46,8 @@ def main():
     print("dev size: {}".format(len(dev_data)))
     print("train size: {}".format(len(train_data)))
 
-    json.dump(dev_data, open(args.output_file.replace(".json", f".sub_dev.{len(dev_data)}.json"), "w"), indent=2, ensure_ascii=False)
-    json.dump(train_data, open(args.output_file.replace(".json", f".sub_train.{len(train_data)}.json"), "w"), indent=2, ensure_ascii=False)
+    json.dump(dev_data, open(args.output_file.replace(".json", f".sub_dev_itemid.{len(dev_data)}.json"), "w"), indent=2, ensure_ascii=False)
+    json.dump(train_data, open(args.output_file.replace(".json", f".sub_train_itemid.{len(train_data)}.json"), "w"), indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":

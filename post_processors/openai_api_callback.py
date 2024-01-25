@@ -231,6 +231,10 @@ class OpenAICallBack:
         np_output_file = self.output_file.replace(".json", ".npy")
         np.save(np_output_file, np.array(outputs))
 
-        metrics = {"acc": cnt / len(self.predictions), "correct": cnt, "total": len(self.predictions)}
+        if len(self.predictions) == 0:
+            metrics = {"acc": 0, "correct": 0, "total": 0}
+        else:
+            metrics = {"acc": cnt / len(self.predictions), "correct": cnt, "total": len(self.predictions)}
         json.dump(metrics, open(self.output_file.replace(".json", ".metrics.json"), "w"), indent=2)
-        return {"acc": cnt / len(self.predictions)}, []
+        # return {"acc": cnt / len(self.predictions)}, []
+        return metrics, []

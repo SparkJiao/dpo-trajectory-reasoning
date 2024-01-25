@@ -1,0 +1,77 @@
+defaults:
+  - hydra: default
+  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+  - post_process: openai_react
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+
+data_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w4.v1.0.th.s42/checkpoint-400/
+
+port: 6000
+sample_num: 3
+split_size: 2
+split_id: 0
+
+output_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.no_action.sub_train.11348.sub_dev.348.sample${sample_num}.tem${read_tensor.service_processor.temperature}.${split_id}-of-${split_size}.json
+flush_file: ${output_file}l
+
+# Data loading
+read_tensor:
+  _target_: data.logiqav2.ComposePromptGenerator
+  read_func:
+    _target_: data.logiqav2.SubResponseMergeReader
+#    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.no_action.sub_dev.1000.json
+    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.no_action.sub_train.11348.sub_dev.348.json
+  template_id: 9
+  instruction:
+    _target_: data.prompts.logiqav2.react.prompts.get_prompt
+    prompt_name: react_v2
+  compose_keys: [ "context", "question", "option_list", "response" ]
+  max_data_num: -1
+  split_size: ${split_size}
+  split_id: ${split_id}
+  api_based: False
+  service_based: True
+  service_processor:
+    _target_: data.vllm.VLLMRequestGenerator
+    api_url: http://0.0.0.0:${port}/v1/completions
+    max_tokens: 2048
+    model: llama2-7b-logiqav2-step-dpo
+    n: ${sample_num}
+    temperature: 1.0
+#    top_p: 0.8
+    stop: [ "</s>", "\n\n\n\n" ]
+  flush_file: ${flush_file}
+
+# Dataloader
+num_workers: 32
+prefetch_factor: 2
+
+output_dir:
+
+post_process:
+  resume: True
+
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

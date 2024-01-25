@@ -1,6 +1,6 @@
 defaults:
   - hydra: default
-  - reader/logiqav2@read_tensor: react_service_0shot_v1_0
+  - reader/logiqav2@read_tensor: react_service_1shot_v1_0
   - post_process: openai_react
 #  - api/vllm/vllm_params@sampling_params: sampling_param_sample
   - _self_
@@ -10,45 +10,42 @@ hydra:
     - file://conf/
 
 train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
-dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
-test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+#test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
 
 save_best: False
 exp_name:
 exp_notes:
 #output_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.A100.w4.v7.9.1.s42/checkpoint-3600/
 #output_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w4.v1.0.th.s43/checkpoint-800/
-output_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w4.v1.0.th.s42/checkpoint-400
 #output_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.H100.w4.v1.0.th.s42/checkpoint-1200/
+output_dir: ../pretrained-models/Llama-2-70b-chat-hf
 eval_sub_path:
 
 #sampling_params:
 #  max_tokens: 3072
 #gpu_memory_utilization: 0.95
 
-split_size: 2
-split_id: 0
-port: 6000
-
 read_tensor:
-  split_size: ${split_size}
-  split_id: ${split_id}
+  split_size: -1
+  split_id: 0
   template_id: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
   service_based: True
   service_processor:
     _target_: data.vllm.VLLMRequestGenerator
-    api_url: http://0.0.0.0:${port}/v1/completions
-    max_tokens: 3072
-#    model: llama2-7b-step-dpo-v1.0-th-cp800
-    model: llama2-7b-logiqav2-step-dpo
-    stop: [ "</s>", "\n\n\n\n" ]
-    n: 10
-#    n: 5
-    temperature: 1.0
+    api_url: http://0.0.0.0:6000/v1/completions
+    max_tokens: 2048
+    model: llama-2-70b-chat
+    stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
+#    n: 10
+    n: 1
+#    temperature: 1.0
 #    temperature: 2.0
+    temperature: 0.0
   flush_file: ${flush_file}
 
-output_file: ${output_dir}/logiqav2.react.train.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.${split_id}-of-${split_size}.json
+output_file: ${output_dir}/logiqav2.react.dev.1shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.json
 flush_file: ${output_file}l
 
 # Dataloader
@@ -72,5 +69,3 @@ device:
 train_batch_size:
 eval_batch_size:
 world_size:
-
-# CUDA_VISIBLE_DEVICES=0 run15 python vllm_inference.py  -cp conf/api/vllm/mistral/reclor/ -cn train_react_1shot_sample5_split_v1_0 read_tensor.split_size=4 read_tensor.split_id=0
