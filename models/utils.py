@@ -104,5 +104,12 @@ class DPOModelOutput(ModelOutput):
     batch_rejected_reward: Optional[torch.FloatTensor] = None
 
 
+@dataclass
+class RewardModelOutput(ModelOutput):
+    values: torch.FloatTensor = None
+    chosen_end_scores: torch.FloatTensor = None
+    sequence_lengths: torch.LongTensor = None
+
+
 def return_single_device_map():
     return {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}

@@ -9,9 +9,11 @@ from typing import List, Dict, Tuple, Union, Any, Callable, Optional
 
 import omegaconf
 import torch
-from omegaconf.listconfig import ListConfig
+from torch.utils.data import Dataset
+from omegaconf import DictConfig, ListConfig
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer
+import hydra
 
 from data.dpo import ComposeDatasetMixin
 from data.logiqav2 import LogicQAReader
@@ -1035,3 +1037,23 @@ class CompareResponseReader(ComposeDatasetMixin):
         if self.api_based:
             return self.api_getitem(index)
         raise NotImplementedError
+
+
+class ReplayDataset(Dataset):
+    def __init__(self, file_path: str, tokenizer: PreTrainedTokenizer, new_dataset_cfg: DictConfig, old_dataset_cfg: DictConfig, replay_ratio: float = 0.1):
+        logger.info(f"Loading new dataset from {file_path}")
+        self.new_dataset = hydra.utils.instantiate(new_dataset_cfg, file_path=file_path, tokenizer=tokenizer)
+        logger.info(f"Loading old dataset from {old_dataset_cfg}")
+        old_dataset = hydra.utils.instantiate(old_dataset_cfg, tokenizer=tokenizer)
+        logger.info(f"Replay ratio: {replay_ratio}")
+        self.replay_ratio = replay_ratio
+        self.old_data = random.sample([item for item in old_dataset], int(len(old_dataset) * replay_ratio))
+
+    def __len__(self):
+        return len(self.new_dataset) + len(self.old_data)
+
+    def __getitem__(self, index):
+        if index < len(self.new_dataset):
+            return self.new_dataset[index]
+        else:
+            return self.old_data[index - len(self.new_dataset)]

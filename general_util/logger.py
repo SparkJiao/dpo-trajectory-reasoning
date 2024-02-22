@@ -16,8 +16,6 @@ def get_child_logger(child_name):
 
 
 def setting_logger(log_file: str, local_rank: int = -1):
-    model_name = "-".join(log_file.replace('/', ' ').split()[1:])
-
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging.INFO if local_rank in [-1, 0] else logging.WARNING)
@@ -42,12 +40,15 @@ def setting_logger(log_file: str, local_rank: int = -1):
         
     if local_rank == 0:
         dist.barrier()
-    
-    f_handler = logging.FileHandler(os.path.join(
-        output_dir, model_name + '-output.log'))
-    f_handler.setLevel(logging.INFO)
-    f_handler.setFormatter(logging.Formatter(fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-                                             datefmt='%m/%d/%Y %H:%M:%S'))
 
-    logger.addHandler(f_handler)
+    if log_file:
+        model_name = "-".join(log_file.replace('/', ' ').split()[1:])
+        f_handler = logging.FileHandler(os.path.join(
+            output_dir, model_name + '-output.log'))
+        f_handler.setLevel(logging.INFO)
+        f_handler.setFormatter(logging.Formatter(fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+                                                 datefmt='%m/%d/%Y %H:%M:%S'))
+
+        logger.addHandler(f_handler)
+
     return logger

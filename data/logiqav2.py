@@ -238,7 +238,8 @@ class ComposePromptGenerator(Dataset):
 
 class TextInputCollator:
     def __init__(self, tokenizer: PreTrainedTokenizer, max_seq_length: int, padding: str = "longest",
-                 pp_inputs_processor: Callable = None, **kwargs):
+                 pp_inputs_processor: Callable = None,
+                 **kwargs):
         self.tokenizer: PreTrainedTokenizer = tokenizer
 
         self.max_seq_length = max_seq_length
@@ -260,6 +261,28 @@ class TextInputCollator:
         model_inputs["meta_data"] = {
             "inputs": inputs,
             "labels": labels,
+            "index": index,
+        }
+        return model_inputs
+
+
+class TextPromptCollator:
+    def __init__(self, tokenizer: PreTrainedTokenizer, max_seq_length: int, padding: str = "longest",
+                 **kwargs):
+        self.tokenizer: PreTrainedTokenizer = tokenizer
+
+        self.max_seq_length = max_seq_length
+        self.padding = padding
+
+    def __call__(self, batch):
+        inputs = [b["input"] for b in batch]
+        index = [b["index"] for b in batch]
+
+        model_inputs = self.tokenizer(inputs, padding=self.padding, truncation=True, max_length=self.max_seq_length,
+                                      return_tensors="pt")
+
+        model_inputs["meta_data"] = {
+            "inputs": inputs,
             "index": index,
         }
         return model_inputs

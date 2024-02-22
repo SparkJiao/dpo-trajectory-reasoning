@@ -171,18 +171,6 @@ def main(cfg: DictConfig):
             os.makedirs(cfg.output_dir)
         OmegaConf.save(cfg, os.path.join(cfg.output_dir, "training_config.yaml"))
 
-        wandb.init(
-            project="llm-reasoning",
-            name=cfg.exp_name,
-            notes=cfg.exp_notes,
-            config=OmegaConf.to_container(cfg, resolve=True),
-        )
-        wandb.define_metric(cfg.prediction_cfg.metric, summary=("max" if cfg.prediction_cfg.measure > 0 else "min"))
-
-        tb_helper = instantiate(cfg.summary_helper) if "summary_helper" in cfg and cfg.summary_helper else None
-    else:
-        tb_helper = None
-
     cfg.train_batch_size = cfg.per_gpu_train_batch_size
 
     train_files, total_dataset_len = organize_multiple_dataset(cfg, tokenizer, _split="train")
@@ -204,8 +192,6 @@ def main(cfg: DictConfig):
 
     rl_engine = instantiate(cfg.rl_engine_init, cfg)
     rl_trainer = instantiate(cfg.rl_trainer_init, rl_engine, cfg)
-
-    # Prepare model
 
     # first number is how many experience-batch to generate, second number is the training batch size, which is the micro-batch size used
     exp_mini_dataset = MiniDataset(cfg.generation_batches, cfg.per_gpu_train_batch_size)
@@ -231,6 +217,19 @@ def main(cfg: DictConfig):
         rl_trainer.resume(cfg.resume)
     else:
         continue_from_global_step = 0
+
+    if cfg.local_rank in [-1, 0]:
+        wandb.init(
+            project="llm-reasoning",
+            name=cfg.exp_name,
+            notes=cfg.exp_notes,
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.define_metric(cfg.prediction_cfg.metric, summary=("max" if cfg.prediction_cfg.measure > 0 else "min"))
+
+        tb_helper = instantiate(cfg.summary_helper) if "summary_helper" in cfg and cfg.summary_helper else None
+    else:
+        tb_helper = None
 
     for epoch in train_iterator:
         for _file in train_files:
@@ -271,7 +270,7 @@ def main(cfg: DictConfig):
                         # batch["labels"],
                         **batch,
                         global_step=global_step,
-                        print_answers=cfg.print_answers and global_step % 20 == 0,
+                        # print_answers=cfg.print_answers and global_step % 20 == 0,
                     )
 
                     # if batch_unsupervised is not None:
@@ -508,12 +507,12 @@ def main(cfg: DictConfig):
 
                         # Save model checkpoint
                         if cfg.save_steps > 0 and global_step % cfg.save_steps == 0:
-                            output_dir = os.path.join(cfg.output_dir, 'checkpoint-{}'.format(global_step))
-                            if cfg.local_rank in [-1, 0] and not os.path.exists(output_dir):
-                                os.makedirs(output_dir, exist_ok=True)
-                            rl_trainer.save_model(output_dir)
-                            OmegaConf.save(cfg, os.path.join(output_dir, "training_config.yaml"))
-                            logger.info("Saving model checkpoint to %s", output_dir)
+                            # output_dir = os.path.join(cfg.output_dir, 'checkpoint-{}'.format(global_step))
+                            # if cfg.local_rank in [-1, 0] and not os.path.exists(output_dir):
+                            #     os.makedirs(output_dir, exist_ok=True)
+                            rl_trainer.save_model(cfg.output_dir, global_step=global_step)
+                            # OmegaConf.save(cfg, os.path.join(output_dir, "training_config.yaml"))
+                            logger.info("Saving model checkpoint to %s", cfg.output_dir)
 
                         # Evaluation
                         if cfg.evaluate_during_training and cfg.eval_steps > 0 and global_step % cfg.eval_steps == 0:
@@ -529,7 +528,7 @@ def main(cfg: DictConfig):
                                 sub_path = os.path.join(cfg.output_dir, 'checkpoint-{}'.format(global_step))
                                 flag = note_best_checkpoint(cfg, results, sub_path)
                                 if cfg.save_best and flag:
-                                    rl_trainer.save_model(cfg.output_dir)
+                                    rl_trainer.save_model(cfg.output_dir, global_step=-1)
 
                         if len(log_metrics) > 0 and cfg.local_rank in [-1, 0]:
                             wandb.log(log_metrics)

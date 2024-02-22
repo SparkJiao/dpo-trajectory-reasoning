@@ -13,111 +13,35 @@ from peft import (
 )
 from peft.tuners.lora import LoraLayer
 from torch import nn
-from transformers.models.llama.modeling_llama import (
-    LlamaForCausalLM as HfLlamaForCausalLM,
+from transformers.models.gemma.modeling_gemma import (
+    GemmaForCausalLM as HfGemmaForCausalLM,
     PreTrainedModel,
     CausalLMOutputWithPast,
-    LlamaModel,
-    LlamaPreTrainedModel,
-    LlamaConfig,
+    GemmaModel,
+    GemmaPreTrainedModel,
+    GemmaConfig,
 )
 
 from general_util.logger import get_child_logger
 from general_util.training_utils import get_rank
 from models.utils import DPOModelOutput, RewardModelOutput
+from models.llama import PreTrainedModelPeftMixin
 
 logger: Logger = get_child_logger(__name__)
 
-REFERENCE_MODEL: HfLlamaForCausalLM
+REFERENCE_MODEL: HfGemmaForCausalLM
 
 
 def return_single_device_map():
     return {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
 
 
-class PreTrainedModelPeftMixin(PreTrainedModel):
-    @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], *model_args, **kwargs):
-        gradient_checkpointing = kwargs.pop("gradient_checkpointing", False)
-        model = super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        if gradient_checkpointing:
-            model.config.use_cache = False
-            model.gradient_checkpointing_enable()
-
-        return model
-
-    @classmethod
-    def from_pretrained_with_ref_model(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], ref_model: PreTrainedModel,
-                                       *model_args, **kwargs):
-        global REFERENCE_MODEL
-        REFERENCE_MODEL = ref_model
-        REFERENCE_MODEL.eval()
-
-        model = cls.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        return model
-
-    @classmethod
-    def from_pretrained_with_ref_model_lora(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], *model_args, **kwargs):
-        lora_config = kwargs.pop("lora_config", None)
-        assert lora_config is not None, "lora_config must be provided to enable lora training."
-
-        base_model = cls.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
-        global REFERENCE_MODEL
-        REFERENCE_MODEL = base_model
-
-        enable_quantization = "quantization_config" in kwargs
-
-        if lora_config is None:
-            lora_config = LoraConfig(task_type=TaskType.SEQ_CLS, inference_mode=False, r=8, lora_alpha=32,
-                                     lora_dropout=0.1)
-
-        logger.warning(lora_config)
-        logger.info(lora_config.target_modules.__class__)
-        if isinstance(lora_config.target_modules, omegaconf.listconfig.ListConfig):
-            lora_config.target_modules = list(lora_config.target_modules)
-        elif isinstance(lora_config.target_modules, omegaconf.DictConfig):
-            lora_config.target_modules = hydra.utils.instantiate(lora_config.target_modules, model=base_model)
-        else:
-            raise ValueError(f"Unsupported type of target modules: {lora_config.target_modules.__class__}")
-
-        if isinstance(lora_config.modules_to_save, omegaconf.listconfig.ListConfig):
-            lora_config.modules_to_save = list(lora_config.modules_to_save)
-
-        logger.info(lora_config.target_modules.__class__)
-        logger.warning(lora_config.target_modules)
-
-        gradient_checkpointing = base_model.model.gradient_checkpointing
-        if enable_quantization:
-            logger.warning(f"Rank {get_rank()} is being loaded with quantization.")
-            logger.info(f"Quantization config: {kwargs['quantization_config']}")
-            base_model = prepare_model_for_kbit_training(base_model, use_gradient_checkpointing=gradient_checkpointing)
-
-        model = get_peft_model(base_model, lora_config)
-
-        logger.info(f"Reference model type: {REFERENCE_MODEL.__class__.__name__}")
-        logger.info(f"Actor model type: {model.__class__.__name__}")
-
-        compute_dtype = kwargs["torch_dtype"]
-        for name, module in model.named_modules():
-            if isinstance(module, LoraLayer):
-                if compute_dtype == torch.bfloat16:
-                    module = module.to(torch.bfloat16)
-            if 'norm' in name:
-                module = module.to(torch.float32)
-            if 'lm_head' in name or 'embed_tokens' in name:
-                if hasattr(module, 'weight'):
-                    if compute_dtype and module.weight.dtype == torch.float32:
-                        module = module.to(torch.bfloat16)
-
-        model.print_trainable_parameters()
-
-        logger.info(f"Config pad token id after loading pre-trained weights: {model.config.pad_token_id}")
-        logger.info(model.lm_head.__class__.__name__)
-
-        return model
+class PreTrainedGemmaPeftMixin(PreTrainedModelPeftMixin):
+    pass
 
 
-def llama_dpo_batch_forward(model: HfLlamaForCausalLM, input_ids: torch.LongTensor, attention_mask: torch.Tensor, labels: torch.LongTensor):
+# Copied from models.llama.py
+def llama_dpo_batch_forward(model: HfGemmaForCausalLM, input_ids: torch.LongTensor, attention_mask: torch.Tensor, labels: torch.LongTensor):
     outputs = model.model(
         input_ids=input_ids,
         attention_mask=attention_mask,
@@ -136,7 +60,7 @@ def llama_dpo_batch_forward(model: HfLlamaForCausalLM, input_ids: torch.LongTens
     return logits, (per_token_logprobs * loss_mask).sum(-1), loss_mask
 
 
-def llama_last_token_cls_batch_forward(model: LlamaModel, linear: nn.Linear,
+def llama_last_token_cls_batch_forward(model: GemmaModel, linear: nn.Linear,
                                        input_ids: torch.LongTensor, attention_mask: torch.Tensor,
                                        pad_token_id: int, return_full_logits: bool = False):
     transformer_outputs = model(
@@ -157,7 +81,7 @@ def llama_last_token_cls_batch_forward(model: LlamaModel, linear: nn.Linear,
     return rewards, sequence_lengths
 
 
-def llama_last_token_forward_value(model: LlamaModel, linear: nn.Linear,
+def llama_last_token_forward_value(model: GemmaModel, linear: nn.Linear,
                                    input_ids: torch.LongTensor, attention_mask: torch.Tensor,
                                    pad_token_id: int):
     transformer_outputs = model(
@@ -174,7 +98,7 @@ def llama_last_token_forward_value(model: LlamaModel, linear: nn.Linear,
     return values, rewards, sequence_lengths
 
 
-class LlamaForCausalLMDPO(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
+class GemmaForCausalLMDPO(PreTrainedGemmaPeftMixin, HfGemmaForCausalLM):
     def __init__(self, config, beta: float = 0.1, label_smoothing: float = 0.0, use_ipo: bool = False, loss_type: str = "sigmoid"):
         super().__init__(config)
         self.beta = beta
@@ -296,10 +220,10 @@ class LlamaForCausalLMDPO(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
             logger.warning("Config architecture is override to LlamaForCausalLM")
 
 
-class LlamaRewardModel(PreTrainedModelPeftMixin, LlamaPreTrainedModel):
-    def __init__(self, config: LlamaConfig):
+class GemmaRewardModel(PreTrainedGemmaPeftMixin, GemmaPreTrainedModel):
+    def __init__(self, config: GemmaConfig):
         super().__init__(config)
-        self.model = LlamaModel(config)
+        self.model = GemmaModel(config)
         self.score = nn.Linear(config.hidden_size, 1, bias=False)
 
         # Initialize weights and apply final processing
@@ -341,7 +265,7 @@ class LlamaRewardModel(PreTrainedModelPeftMixin, LlamaPreTrainedModel):
         )
 
 
-class LlamaRewardModelForEval(LlamaRewardModel):
+class GemmaRewardModelForEval(GemmaRewardModel):
     def forward(
             self,
             input_ids: torch.LongTensor = None,
@@ -359,10 +283,10 @@ class LlamaRewardModelForEval(LlamaRewardModel):
         )
 
 
-class LlamaModelForSequenceClassification(PreTrainedModelPeftMixin, LlamaPreTrainedModel):
-    def __init__(self, config: LlamaConfig):
+class GemmaModelForSequenceClassification(PreTrainedGemmaPeftMixin, GemmaPreTrainedModel):
+    def __init__(self, config: GemmaConfig):
         super().__init__(config)
-        self.model = LlamaModel(config)
+        self.model = GemmaModel(config)
         self.score = nn.Linear(config.hidden_size, config.num_labels, bias=False)
 
         # Initialize weights and apply final processing
@@ -393,7 +317,7 @@ class LlamaModelForSequenceClassification(PreTrainedModelPeftMixin, LlamaPreTrai
         )
 
 
-class LlamaModelForSequenceClassificationForEval(LlamaModelForSequenceClassification):
+class GemmaModelForSequenceClassificationForEval(GemmaModelForSequenceClassification):
     def forward(
             self,
             input_ids: torch.LongTensor = None,
@@ -407,8 +331,8 @@ class LlamaModelForSequenceClassificationForEval(LlamaModelForSequenceClassifica
         )
 
 
-class LlamaModelForSequenceClassificationForRL(LlamaModelForSequenceClassification):
-    def __init__(self, config: LlamaConfig, reduction_ids: List[int]):
+class GemmaModelForSequenceClassificationForRL(GemmaModelForSequenceClassification):
+    def __init__(self, config: GemmaConfig, reduction_ids: List[int]):
         super().__init__(config)
 
         if isinstance(reduction_ids, omegaconf.ListConfig):
@@ -442,7 +366,7 @@ class LlamaModelForSequenceClassificationForRL(LlamaModelForSequenceClassificati
         )
 
 
-class LlamaForCausalLM(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
+class GemmaForCausalLM(PreTrainedGemmaPeftMixin, HfGemmaForCausalLM):
     def forward(self,
                 input_ids: torch.LongTensor = None,
                 attention_mask: Optional[torch.Tensor] = None,
@@ -454,6 +378,7 @@ class LlamaForCausalLM(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
                 output_attentions: Optional[bool] = None,
                 output_hidden_states: Optional[bool] = None,
                 return_dict: Optional[bool] = None,
+                cache_position: Optional[torch.LongTensor] = None,
                 ) -> Union[Tuple, CausalLMOutputWithPast]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -472,15 +397,11 @@ class LlamaForCausalLM(PreTrainedModelPeftMixin, HfLlamaForCausalLM):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            cache_position=cache_position,
         )
 
         hidden_states = outputs[0]
-        if self.config.pretraining_tp > 1:
-            lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.config.pretraining_tp, dim=0)
-            logits = [nn.functional.linear(hidden_states, lm_head_slices[i]) for i in range(self.config.pretraining_tp)]
-            logits = torch.cat(logits, dim=-1)
-        else:
-            logits = self.lm_head(hidden_states)
+        logits = self.lm_head(hidden_states)
         logits = logits.float()
 
         loss = None
