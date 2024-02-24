@@ -39,6 +39,7 @@ from torch.utils.data import (DataLoader, RandomSampler)
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 from transformers import (AutoTokenizer, PreTrainedTokenizer, PreTrainedModel)
+import transformers
 
 from general_util.dist_utils import get_pipeline_parallel_rank, get_pipeline_parallel_world_size
 from general_util.evaluator import evaluate
@@ -160,7 +161,8 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
         model = torch.compile(model, mode="max-autotune")
     model, optimizer, _, scheduler = deepspeed.initialize(model=model,
                                                           model_parameters=[p for p in model.parameters() if p.requires_grad],
-                                                          config=ds_config)
+                                                          config=ds_config,
+                                                          mpu=mpu if mpu.model_parallel_is_initialized() else None,)
     logger.info(optimizer.optimizer)
 
     unwrapped_model = model.module

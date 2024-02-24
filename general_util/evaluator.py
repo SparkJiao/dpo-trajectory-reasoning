@@ -10,6 +10,7 @@ from torch.utils.data import DistributedSampler, SequentialSampler, DataLoader
 from tqdm import tqdm
 from transformers import PreTrainedTokenizer
 from transformers.generation.configuration_utils import GenerationConfig
+import fairscale.nn.model_parallel.initialize as mpu
 
 from general_util.logger import get_child_logger
 from general_util.training_utils import batch_to_device, load_and_cache_examples, unwrap_model
@@ -29,7 +30,13 @@ def evaluate(cfg: DictConfig, model: torch.nn.Module, tokenizer: PreTrainedToken
 
     cfg.eval_batch_size = cfg.per_gpu_eval_batch_size
     if cfg.ddp_eval and cfg.local_rank != -1:
-        eval_sampler = DistributedSampler(dataset, shuffle=False)
+        if mpu.model_parallel_is_initialized():
+            eval_sampler = DistributedSampler(dataset,
+                                              num_replicas=mpu.get_data_parallel_world_size(),
+                                              rank=mpu.get_data_parallel_rank(),
+                                              seed=cfg.seed)
+        else:
+            eval_sampler = DistributedSampler(dataset, shuffle=False)
     else:
         eval_sampler = SequentialSampler(dataset)  # Note that DistributedSampler samples randomly
 

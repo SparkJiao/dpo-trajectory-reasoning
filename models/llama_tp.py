@@ -3,7 +3,7 @@ import json
 import os
 from collections import OrderedDict
 from glob import glob
-from typing import Union, Optional
+from typing import Union, Optional, Callable
 
 import torch
 import torch.distributed as dist
@@ -243,17 +243,17 @@ class LlamaModelParallelPretrainedMixin(PreTrainedModelPeftMixin):
                 #     for weight in pbar:
                 for weight in tqdm(weights, desc="Loading state dict", disable=hide_progress, total=len(weights)):
                     part_state_dict = torch.load(os.path.join(path, weight))
-                    for key in list(part_state_dict.keys()):
-                        # 对 q_proj.weight 和 k_proj.weight 进行 reshape
-                        if key.endswith("q_proj.weight") or key.endswith("k_proj.weight"):
-                            part_state_dict[key] = rearrange(
-                                part_state_dict[key],
-                                "(h two t) d -> h two t d",
-                                h=config.num_attention_heads,
-                                two=2).transpose(1, 2).reshape(
-                                config.hidden_size,
-                                config.hidden_size)
-                        # part_state_dict[key.replace("model.", "")] = part_state_dict.pop(key)
+                    # for key in list(part_state_dict.keys()):
+                    #     # 对 q_proj.weight 和 k_proj.weight 进行 reshape
+                    #     if key.endswith("q_proj.weight") or key.endswith("k_proj.weight"):
+                    #         part_state_dict[key] = rearrange(
+                    #             part_state_dict[key],
+                    #             "(h two t) d -> h two t d",
+                    #             h=config.num_attention_heads,
+                    #             two=2).transpose(1, 2).reshape(
+                    #             config.hidden_size,
+                    #             config.hidden_size)
+                    # part_state_dict[key.replace("model.", "")] = part_state_dict.pop(key)
                     state_dict.update(part_state_dict)
                     del part_state_dict
 
@@ -439,7 +439,34 @@ class LlamaModelParallelPretrainedMixin(PreTrainedModelPeftMixin):
         return super().from_pretrained(pretrained_model_name_or_path, state_dict=state_dict, *model_args, **kwargs)
 
 
-class LlamaForCausalLM(LlamaModelParallelPretrainedMixin, HfLlamaForCausalLM):
+class LlamaModelParallelPreSplitMixin(PreTrainedModelPeftMixin):
+    @classmethod
+    def from_pretrained(
+            cls,
+            pretrained_model_name_or_path: Optional[Union[str, os.PathLike]],
+            *model_args,
+            **kwargs,
+    ):
+        if mpu.model_parallel_is_initialized():
+            mp_rank = mpu.get_model_parallel_rank()
+            pretrained_model_name_or_path = os.path.join(pretrained_model_name_or_path, f"mp_{mp_rank}-of-{mpu.get_model_parallel_world_size()}")
+        return super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
+
+    @classmethod
+    def save_pretrained(
+            cls,
+            save_directory: Union[str, os.PathLike],
+            **kwargs,
+    ):
+        if mpu.model_parallel_is_initialized():
+            mp_rank = mpu.get_model_parallel_rank()
+            if not os.path.exists(save_directory):
+                os.makedirs(save_directory)
+            save_directory = os.path.join(save_directory, f"mp_{mp_rank}-of-{mpu.get_model_parallel_world_size()}")
+        super().save_pretrained(save_directory, **kwargs)
+
+
+class LlamaForCausalLM(LlamaModelParallelPreSplitMixin, HfLlamaForCausalLM):
     def __init__(self, config: LlamaConfig):
         super().__init__(config)
         self.model = LlamaModelParallel(config)
