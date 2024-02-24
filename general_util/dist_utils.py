@@ -6,6 +6,7 @@ import torch
 import torch.distributed as dist
 from deepspeed.accelerator import get_accelerator
 from omegaconf import DictConfig
+from fairscale.nn.model_parallel.initialize import get_pipeline_parallel_group
 
 
 def vanilla_torch_dist(cfg: DictConfig, backend="nccl"):
@@ -89,3 +90,13 @@ def print_all_ranks(tag, value, rank):
     all_tensor[rank] = value
     dist.all_reduce(all_tensor, op=dist.ReduceOp.SUM)
     print_rank_0(f'{tag} {all_tensor}', rank)
+
+
+def get_pipeline_parallel_world_size() -> int:
+    """Return world size for the model parallel group."""
+    return torch.distributed.get_world_size(group=get_pipeline_parallel_group())
+
+
+def get_pipeline_parallel_rank() -> int:
+    """Return my rank for the model parallel group."""
+    return torch.distributed.get_rank(group=get_pipeline_parallel_group())

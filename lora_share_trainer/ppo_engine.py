@@ -584,7 +584,7 @@ class DSChatPPOTrainer:
         if not save_ds_state:
             if zero_stage == 3:
                 logger.warning("Deepspeed ZeRO-3 has to save checkpoint states since the model is sharded.")
-                saving_ds_state = True
+                save_ds_state = True
 
         if save_ds_state:
             model.save_checkpoint(output_dir)
