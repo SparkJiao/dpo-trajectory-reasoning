@@ -153,6 +153,11 @@ def main(cfg: DictConfig):
             os.path.dirname(c) for c in
             glob.glob(cfg.output_dir + f"/{cfg.eval_sub_path}/" + "pytorch_model*.bin", recursive=True)
         ))))
+        if len(checkpoints) == 0:
+            checkpoints = list(sorted(list(set(
+                os.path.dirname(c) for c in
+                glob.glob(cfg.output_dir + f"/{cfg.eval_sub_path}/" + "model*.safetensors", recursive=True)
+            ))))
         logging.getLogger("transformers.modeling_utils").setLevel(logging.WARN)  # Reduce logging
     logger.info(" the following checkpoints: %s", checkpoints)
     for checkpoint in checkpoints:

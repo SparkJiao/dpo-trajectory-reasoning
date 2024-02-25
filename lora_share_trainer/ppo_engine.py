@@ -23,6 +23,8 @@ from general_util.logger import get_child_logger
 from general_util.training_utils import unwrap_model, get_zero_stage
 from general_util.transformer_engine import convert_model
 
+import fairscale.nn.model_parallel.initialize as mpu
+
 try:
     import transformer_engine.pytorch as transformer_engine
     from transformer_engine.common import recipe
@@ -108,6 +110,7 @@ class DeepSpeedChatPPOEngine:
             model=actor_model,
             model_parameters=optim_params,
             config_params=ds_config,
+            mpu=mpu if mpu.model_parallel_is_initialized() else None,
         )
 
         log_init("Actor", stime)
@@ -129,6 +132,7 @@ class DeepSpeedChatPPOEngine:
             ref_engine, *_ = deepspeed.initialize(
                 model=actor_model_or_reward_model,
                 config_params=ds_config,
+                mpu=mpu if mpu.model_parallel_is_initialized() else None,
             )
         else:
             ref_engine = actor_model_or_reward_model
@@ -154,6 +158,7 @@ class DeepSpeedChatPPOEngine:
             model=actor_model,
             # model_parameters=optim_params,
             config_params=ds_config,
+            mpu=mpu if mpu.model_parallel_is_initialized() else None,
         )
 
         log_init("EMA", stime)
@@ -177,6 +182,7 @@ class DeepSpeedChatPPOEngine:
             model=critic_model,
             model_parameters=optim_params,
             config_params=ds_config,
+            mpu=mpu if mpu.model_parallel_is_initialized() else None,
         )
 
         log_init("Critic", stime)
@@ -197,6 +203,7 @@ class DeepSpeedChatPPOEngine:
             ref_engine, *_ = deepspeed.initialize(
                 model=reward_model,
                 config_params=ds_config,
+                mpu=mpu if mpu.model_parallel_is_initialized() else None,
             )
         else:
             ref_engine = reward_model

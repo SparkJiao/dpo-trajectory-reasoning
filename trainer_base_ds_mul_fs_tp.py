@@ -41,7 +41,7 @@ from tqdm import tqdm, trange
 from transformers import (AutoTokenizer, PreTrainedTokenizer, PreTrainedModel)
 import transformers
 
-from general_util.dist_utils import get_pipeline_parallel_rank, get_pipeline_parallel_world_size
+from general_util.dist_utils import get_pipeline_parallel_rank, get_pipeline_parallel_world_size, prepare_distributed_sampler
 from general_util.evaluator import evaluate
 from general_util.logger import setting_logger
 from general_util.training_utils import batch_to_device, set_seed, note_best_checkpoint, load_and_cache_examples, set_seed_int, \
@@ -88,17 +88,23 @@ def save_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine]
     else:
         state_dict = model.module.state_dict()
 
-    if dist.is_initialized() and cfg.local_rank != 0:
+    if mpu.model_parallel_is_initialized():
+        dp_rank = mpu.get_data_parallel_rank()
+    else:
+        dp_rank = cfg.local_rank
+
+    if dist.is_initialized() and dp_rank != 0:
         dist.barrier()
 
-    if cfg.local_rank in [-1, 0]:
+    if dp_rank in [-1, 0]:
         unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, safe_serialization=False)
 
-        if tokenizer is not None:
-            tokenizer.save_pretrained(output_dir)
+        if cfg.local_rank in [-1, 0]:
+            if tokenizer is not None:
+                tokenizer.save_pretrained(output_dir)
 
-        OmegaConf.save(cfg, os.path.join(output_dir, "training_config.yaml"))
-        logger.info("Saving model checkpoint to %s", output_dir)
+            OmegaConf.save(cfg, os.path.join(output_dir, "training_config.yaml"))
+            logger.info("Saving model checkpoint to %s", output_dir)
 
         if dist.is_initialized():
             dist.barrier()
@@ -136,12 +142,7 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
         logger.info(f"Extended extra vocab size: {cfg.extended_vocab}")
         model.resize_token_embeddings(model.config.vocab_size + cfg.extended_vocab)
 
-    if mpu.model_parallel_is_initialized():
-        dp_degree = mpu.get_data_parallel_world_size()
-    elif dist.is_initialized():
-        dp_degree = dist.get_world_size()
-    else:
-        dp_degree = 1
+    dp_degree = cfg.dp_size
     _actual_train_batch_size = cfg.train_batch_size * cfg.gradient_accumulation_steps * dp_degree
     if cfg.max_steps > 0:
         t_total = cfg.max_steps
@@ -162,7 +163,7 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
     model, optimizer, _, scheduler = deepspeed.initialize(model=model,
                                                           model_parameters=[p for p in model.parameters() if p.requires_grad],
                                                           config=ds_config,
-                                                          mpu=mpu if mpu.model_parallel_is_initialized() else None,)
+                                                          mpu=mpu if mpu.model_parallel_is_initialized() else None, )
     logger.info(optimizer.optimizer)
 
     unwrapped_model = model.module
@@ -203,13 +204,7 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
             if cfg.local_rank == -1:
                 sub_train_sampler = RandomSampler(sub_train_dataset)
             else:
-                if mpu.model_parallel_is_initialized():
-                    sub_train_sampler = DistributedSampler(sub_train_dataset,
-                                                           num_replicas=mpu.get_data_parallel_world_size(),
-                                                           rank=mpu.get_data_parallel_rank(),
-                                                           seed=cfg.seed)
-                else:
-                    sub_train_sampler = DistributedSampler(sub_train_dataset)
+                sub_train_sampler = prepare_distributed_sampler(sub_train_dataset, cfg.seed)
             sub_train_collator = hydra.utils.instantiate(cfg.collator) if "collator" in cfg and cfg.collator else None
             sub_train_dataloader = DataLoader(dataset=sub_train_dataset,
                                               sampler=sub_train_sampler,
@@ -308,15 +303,18 @@ def main(cfg: DictConfig):
     if cfg.local_rank == -1 or cfg.no_cuda:
         device = str(torch.device("cuda" if torch.cuda.is_available() and not cfg.no_cuda else "cpu"))
         cfg.n_gpu = torch.cuda.device_count()
+        cfg.dp_size = 1
     else:  # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
         torch.cuda.set_device(cfg.local_rank)
         device = str(torch.device("cuda", cfg.local_rank))
         deepspeed.init_distributed(dist_backend="nccl", timeout=datetime.timedelta(seconds=9600))
         cfg.n_gpu = 1
         cfg.world_size = dist.get_world_size()
-
+        cfg.dp_size = dist.get_world_size()
         if cfg.tp_size > 1:
             initialize_model_parallel(cfg.tp_size)
+            cfg.dp_size = mpu.get_data_parallel_world_size()
+
     cfg.device = device
 
     global logger
@@ -325,6 +323,9 @@ def main(cfg: DictConfig):
                    cfg.local_rank, cfg.device, cfg.n_gpu, bool(cfg.local_rank != -1), cfg.fp16)
     logger.warning(f"CPU cores: {os.cpu_count()}")
 
+    # dp_rank = cfg.local_rank
+    # mp_rank = 0
+    # pp_rank = 0
     if mpu.model_parallel_is_initialized():
         dp_size = mpu.get_data_parallel_world_size()
         dp_rank = mpu.get_data_parallel_rank()
@@ -341,6 +342,7 @@ def main(cfg: DictConfig):
     set_seed(cfg)
 
     # from models.llama_tp import LlamaForCausalLM
+    # # from transformers.models.llama import LlamaForCausalLM
     #
     # model = LlamaForCausalLM.from_pretrained("pretrained-models/Llama-2-7b-chat-hf",
     #                                          attn_implementation="flash_attention_2",

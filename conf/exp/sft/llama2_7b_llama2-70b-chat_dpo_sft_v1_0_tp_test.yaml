@@ -68,9 +68,12 @@ resume:
 
 # Parallel config
 tp_size: 2
+dp_size:
+pp_size: 1
 
 #exp_name: llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A100.mp2.dp2.v1.0.s${seed}.test
-exp_name: llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A100.mp2.dp2.v1.1.s${seed}.test  # Fix the problem of slice rotary.
+#exp_name: llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A100.mp2.dp2.v1.1.s${seed}.test  # Fix the problem of slice rotary.
+exp_name: llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.H100.mp2.dp2.v1.1.s${seed}.test  # Fix the problem of slice rotary.
 exp_notes:
 output_dir: experiments/${exp_name}  # Fix <pad token id>
 

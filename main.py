@@ -24,6 +24,8 @@ from general_util.training_utils import (
     load_and_cache_examples,
     organize_multiple_dataset,
 )
+import fairscale.nn.model_parallel.initialize as mpu
+from general_util.dist_utils import get_pipeline_parallel_world_size, get_pipeline_parallel_rank, prepare_distributed_sampler
 
 logger: logging.Logger
 
@@ -146,12 +148,17 @@ def main(cfg: DictConfig):
     if cfg.local_rank == -1 or cfg.no_cuda:
         device = str(torch.device("cuda" if torch.cuda.is_available() and not cfg.no_cuda else "cpu"))
         cfg.n_gpu = torch.cuda.device_count()
+        cfg.dp_size = 1
     else:  # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
         torch.cuda.set_device(cfg.local_rank)
         device = str(torch.device("cuda", cfg.local_rank))
         deepspeed.init_distributed(dist_backend="nccl", timeout=datetime.timedelta(seconds=7200))
         cfg.n_gpu = 1
         cfg.world_size = dist.get_world_size()
+        cfg.dp_size = dist.get_world_size()
+        if cfg.tp_size > 1:
+            mpu.initialize_model_parallel(cfg.tp_size)
+            cfg.dp_size = mpu.get_data_parallel_world_size()
     cfg.device = device
 
     global logger
@@ -159,6 +166,18 @@ def main(cfg: DictConfig):
     logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
                    cfg.local_rank, cfg.device, cfg.n_gpu, bool(cfg.local_rank != -1), cfg.fp16)
     logger.warning(f"CPU cores: {os.cpu_count()}")
+
+    if mpu.model_parallel_is_initialized():
+        dp_size = mpu.get_data_parallel_world_size()
+        dp_rank = mpu.get_data_parallel_rank()
+        mp_size = mpu.get_model_parallel_world_size()
+        mp_rank = mpu.get_model_parallel_rank()
+        pp_size = get_pipeline_parallel_world_size()
+        pp_rank = get_pipeline_parallel_rank()
+        logger.warning(f"Rank: {cfg.local_rank}, "
+                       f"Data Parallel: {dp_rank}/{dp_size}, "
+                       f"Model Parallel: {mp_rank}/{mp_size}, "
+                       f"Pipeline Parallel: {pp_rank}/{pp_size}")
 
     # Set seed
     set_seed(cfg)
@@ -175,7 +194,7 @@ def main(cfg: DictConfig):
 
     train_files, total_dataset_len = organize_multiple_dataset(cfg, tokenizer, _split="train")
 
-    dp_degree = dist.get_world_size() if cfg.local_rank != -1 else 1
+    dp_degree = cfg.dp_size
     _actual_train_batch_size = cfg.train_batch_size * cfg.gradient_accumulation_steps * dp_degree
     if cfg.max_steps > 0:
         t_total = cfg.max_steps
@@ -195,7 +214,6 @@ def main(cfg: DictConfig):
 
     # first number is how many experience-batch to generate, second number is the training batch size, which is the micro-batch size used
     exp_mini_dataset = MiniDataset(cfg.generation_batches, cfg.per_gpu_train_batch_size)
-    # unsup_mini_dataset = MiniDataset(cfg.generation_batches, cfg.per_device_training_batch_size)
 
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", cfg.total_dataset_len)
@@ -234,7 +252,10 @@ def main(cfg: DictConfig):
     for epoch in train_iterator:
         for _file in train_files:
             sub_train_dataset = load_and_cache_examples(cfg, tokenizer, _split="train", _file=_file)
-            sub_train_sampler = RandomSampler(sub_train_dataset) if cfg.local_rank == -1 else DistributedSampler(sub_train_dataset)
+            if cfg.local_rank == -1:
+                sub_train_sampler = RandomSampler(sub_train_dataset)
+            else:
+                sub_train_sampler = prepare_distributed_sampler(sub_train_dataset, cfg.seed)
             sub_train_collator = hydra.utils.instantiate(cfg.collator) if "collator" in cfg and cfg.collator else None
             sub_train_dataloader = DataLoader(dataset=sub_train_dataset,
                                               sampler=sub_train_sampler,
@@ -265,21 +286,9 @@ def main(cfg: DictConfig):
                 exp_dataset = None
                 for _ in range(cfg.generation_batches):
                     out = rl_trainer.generate_experience(
-                        # batch["input_ids"],
-                        # batch["attention_mask"],
-                        # batch["labels"],
                         **batch,
                         global_step=global_step,
-                        # print_answers=cfg.print_answers and global_step % 20 == 0,
                     )
-
-                    # if batch_unsupervised is not None:
-                    #     batch_unsupervised = to_device(batch_unsupervised, device)
-                    #     unsup_dataset = unsup_mini_dataset.add(batch_unsupervised)
-                    # else:
-                    # unsup_dataset = unsup_mini_dataset.add(
-                    #     [[None] * args.per_device_generation_batch_size]
-                    # )
 
                     exp_dataset = exp_mini_dataset.add(out)
 

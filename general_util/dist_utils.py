@@ -2,11 +2,13 @@ import datetime
 import os
 import subprocess
 
+import fairscale.nn.model_parallel.initialize as mpu
 import torch
 import torch.distributed as dist
 from deepspeed.accelerator import get_accelerator
-from omegaconf import DictConfig
 from fairscale.nn.model_parallel.initialize import get_pipeline_parallel_group
+from omegaconf import DictConfig
+from torch.utils.data.distributed import DistributedSampler
 
 
 def vanilla_torch_dist(cfg: DictConfig, backend="nccl"):
@@ -100,3 +102,14 @@ def get_pipeline_parallel_world_size() -> int:
 def get_pipeline_parallel_rank() -> int:
     """Return my rank for the model parallel group."""
     return torch.distributed.get_rank(group=get_pipeline_parallel_group())
+
+
+def prepare_distributed_sampler(dataset: torch.utils.data.Dataset, random_seed: int = 42):
+    if mpu.model_parallel_is_initialized():
+        sub_train_sampler = DistributedSampler(dataset,
+                                               num_replicas=mpu.get_data_parallel_world_size(),
+                                               rank=mpu.get_data_parallel_rank(),
+                                               seed=random_seed)
+    else:
+        sub_train_sampler = DistributedSampler(dataset)
+    return sub_train_sampler

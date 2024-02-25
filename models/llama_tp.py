@@ -3,12 +3,13 @@ import json
 import os
 from collections import OrderedDict
 from glob import glob
-from typing import Union, Optional, Callable
+from typing import Union, Optional, Callable, List, Tuple
 
 import torch
 import torch.distributed as dist
 import torch.utils.checkpoint
 from einops import rearrange
+import omegaconf
 from fairscale.nn.model_parallel import initialize as mpu
 from fairscale.nn.model_parallel.layers import ColumnParallelLinear, RowParallelLinear, VocabParallelEmbedding
 from torch import nn
@@ -24,11 +25,14 @@ from transformers.models.llama.modeling_llama import (
     LlamaModel,
     is_flash_attn_greater_or_equal_2_10,
     LlamaForCausalLM as HfLlamaForCausalLM,
+    LlamaPreTrainedModel,
+    CausalLMOutputWithPast,
 )
 
 from general_util.dist_utils import get_pipeline_parallel_rank, get_pipeline_parallel_world_size
 from general_util.logger import get_child_logger
-from models.llama import PreTrainedModelPeftMixin
+from models.llama import PreTrainedModelPeftMixin, llama_last_token_forward_value
+from models.utils import DPOModelOutput, RewardModelOutput
 
 logger = get_child_logger(__name__)
 
@@ -452,10 +456,10 @@ class LlamaModelParallelPreSplitMixin(PreTrainedModelPeftMixin):
             pretrained_model_name_or_path = os.path.join(pretrained_model_name_or_path, f"mp_{mp_rank}-of-{mpu.get_model_parallel_world_size()}")
         return super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
 
-    @classmethod
     def save_pretrained(
-            cls,
+            self,
             save_directory: Union[str, os.PathLike],
+            *args,
             **kwargs,
     ):
         if mpu.model_parallel_is_initialized():
@@ -463,7 +467,7 @@ class LlamaModelParallelPreSplitMixin(PreTrainedModelPeftMixin):
             if not os.path.exists(save_directory):
                 os.makedirs(save_directory)
             save_directory = os.path.join(save_directory, f"mp_{mp_rank}-of-{mpu.get_model_parallel_world_size()}")
-        super().save_pretrained(save_directory, **kwargs)
+        super().save_pretrained(save_directory, *args, **kwargs)
 
 
 class LlamaForCausalLM(LlamaModelParallelPreSplitMixin, HfLlamaForCausalLM):
@@ -473,3 +477,108 @@ class LlamaForCausalLM(LlamaModelParallelPreSplitMixin, HfLlamaForCausalLM):
         self.lm_head = ColumnParallelLinear(config.hidden_size, config.vocab_size, bias=False)
 
         self.post_init()
+
+    def forward(self,
+                input_ids: torch.LongTensor = None,
+                attention_mask: Optional[torch.Tensor] = None,
+                position_ids: Optional[torch.LongTensor] = None,
+                past_key_values: Optional[List[torch.FloatTensor]] = None,
+                inputs_embeds: Optional[torch.FloatTensor] = None,
+                labels: Optional[torch.LongTensor] = None,
+                use_cache: Optional[bool] = None,
+                output_attentions: Optional[bool] = None,
+                output_hidden_states: Optional[bool] = None,
+                return_dict: Optional[bool] = None,
+                cache_position: Optional[torch.LongTensor] = None,
+                ) -> Union[Tuple, CausalLMOutputWithPast]:
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+            cache_position=cache_position,
+        )
+
+        hidden_states = outputs[0]
+        # if self.config.pretraining_tp > 1:
+        #     lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.config.pretraining_tp, dim=0)
+        #     logits = [nn.functional.linear(hidden_states, lm_head_slices[i]) for i in range(self.config.pretraining_tp)]
+        #     logits = torch.cat(logits, dim=-1)
+        # else:
+        logits = self.lm_head(hidden_states)
+        logits = logits.float()
+
+        loss = None
+        if labels is not None:
+            # Shift so that tokens < n predict n
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
+            loss_fct = nn.CrossEntropyLoss()
+            shift_logits = shift_logits.view(-1, self.config.vocab_size)
+            shift_labels = shift_labels.view(-1)
+            # Enable model parallelism
+            shift_labels = shift_labels.to(shift_logits.device)
+            shift_labels[shift_labels.eq(self.config.pad_token_id)] = -100  # Take care of here.
+            loss = loss_fct(shift_logits, shift_labels)
+
+        if not return_dict:
+            output = (logits,) + outputs[1:]
+            return (loss,) + output if loss is not None else output
+
+        return CausalLMOutputWithPast(
+            loss=loss,
+            logits=logits,
+            past_key_values=outputs.past_key_values,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions,
+        )
+
+
+class LlamaModelForSequenceClassificationForRL(LlamaModelParallelPreSplitMixin, LlamaPreTrainedModel):
+    def __init__(self, config: LlamaConfig, reduction_ids: List[int]):
+        super().__init__(config)
+        self.model = LlamaModel(config)
+        self.score = ColumnParallelLinear(config.hidden_size, config.num_labels, bias=False)
+
+        if isinstance(reduction_ids, omegaconf.ListConfig):
+            reduction_ids = list(reduction_ids)
+
+        self.reduction_ids = reduction_ids
+
+    def logit2prob(self, logits):
+        probs = torch.softmax(logits, dim=-1)
+        if len(logits.size()) == 3:
+            probs = probs[:, :, self.reduction_ids].sum(dim=-1)
+        elif len(logits.size()) == 2:
+            probs = probs[:, self.reduction_ids].sum(dim=-1)
+        else:
+            raise ValueError(f"Unsupported logits shape: {logits.size()}")
+        return probs
+
+    def forward(
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            **kwargs,
+    ) -> Union[Tuple, RewardModelOutput]:
+        values, rewards, sequence_lengths = llama_last_token_forward_value(self.model, self.score, input_ids, attention_mask, self.config.pad_token_id)
+        values = self.logit2prob(values)
+        rewards = self.logit2prob(rewards)
+        return RewardModelOutput(
+            values=values,
+            chosen_end_scores=rewards,
+            sequence_lengths=sequence_lengths,
+        )
