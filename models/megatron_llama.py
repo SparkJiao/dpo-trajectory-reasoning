@@ -25,7 +25,8 @@ import torch
 import torch.nn.functional as F
 
 from megatron import get_args
-from megatron import mpu
+from megatron import core
+from megatron.core import tensor_parallel, parallel_state
 from megatron.model.module import MegatronModule, float16_to_fp32, fp32_to_float16
 from megatron.model.enums import AttnMaskType, LayerType, AttnType
 from megatron.model.utils import get_linear_layer, init_method_normal, scaled_init_method_normal, attention_mask_func, \
@@ -141,12 +142,12 @@ class LlamaLMHead(MegatronModule):
         self.init_method = init_method
         self.parallel_output = parallel_output
 
-        self.lm_head = mpu.ColumnParallelLinear(input_size=self.hidden_size,
-                                                output_size=vocab_size,
-                                                bias=False,
-                                                gather_output=not self.parallel_output,
-                                                skip_bias_add=True,
-                                                init_method=self.init_method, )
+        self.lm_head = tensor_parallel.ColumnParallelLinear(input_size=self.hidden_size,
+                                                            output_size=vocab_size,
+                                                            bias=False,
+                                                            gather_output=not self.parallel_output,
+                                                            skip_bias_add=True,
+                                                            init_method=self.init_method, )
 
     def forward(self, inputs):
         logits, _ = self.lm_head(inputs)
@@ -199,8 +200,8 @@ class LlamaEmbedding(MegatronModule):
         self.init_method = init_method
 
         # Word embeddings (parallel).
-        self.word_embeddings = mpu.VocabParallelEmbedding(vocab_size, self.hidden_size,
-                                                          init_method=self.init_method)
+        self.word_embeddings = tensor_parallel.VocabParallelEmbedding(vocab_size, self.hidden_size,
+                                                                      init_method=self.init_method)
 
     def forward(self, input_ids):
         # Embeddings.
@@ -248,7 +249,7 @@ class LlamaParallelMLP(MegatronModule):
         self.output_layer_init_method = output_layer_init_method
 
         # Project to intermediate.
-        self.gate_proj = mpu.ColumnParallelLinear(
+        self.gate_proj = tensor_parallel.ColumnParallelLinear(
             args.hidden_size,
             args.ffn_hidden_size,
             gather_output=False,
@@ -259,7 +260,7 @@ class LlamaParallelMLP(MegatronModule):
             enable_expert_tensor_parallelism=enable_expert_tensor_parallelism
         )
 
-        self.up_proj = mpu.ColumnParallelLinear(
+        self.up_proj = tensor_parallel.ColumnParallelLinear(
             args.hidden_size,
             args.ffn_hidden_size,
             gather_output=False,
@@ -273,7 +274,7 @@ class LlamaParallelMLP(MegatronModule):
         self.activation_func = F.silu
 
         # Project back to h.
-        self.down_proj = mpu.RowParallelLinear(
+        self.down_proj = tensor_parallel.RowParallelLinear(
             args.ffn_hidden_size,
             args.hidden_size,
             input_is_parallel=True,
@@ -344,23 +345,23 @@ class LlamaParallelAttention(MegatronModule):
         kv_projection_size = args.kv_channels * self.num_key_value_heads
 
         # Per attention head and per partition values.
-        world_size = mpu.get_tensor_model_parallel_world_size()
-        self.hidden_size_per_partition = mpu.divide(projection_size,
-                                                    world_size)
+        world_size = parallel_state.get_tensor_model_parallel_world_size()
+        self.hidden_size_per_partition = core.utils.divide(projection_size,
+                                                           world_size)
 
-        self.hidden_size_per_attention_head = mpu.divide(
+        self.hidden_size_per_attention_head = core.utils.divide(
             projection_size, args.num_attention_heads)
 
-        self.num_attention_heads_per_partition = mpu.divide(
+        self.num_attention_heads_per_partition = core.utils.divide(
             args.num_attention_heads, world_size)
 
-        self.num_key_value_heads_per_partition = mpu.divide(
+        self.num_key_value_heads_per_partition = core.utils.divide(
             args.num_key_value_heads, world_size)
 
         # Strided linear layer.
         assert attention_type == AttnType.self_attn
 
-        self.query_key_value = mpu.ColumnParallelLinear(
+        self.query_key_value = tensor_parallel.ColumnParallelLinear(
             args.hidden_size,
             projection_size + 2 * kv_projection_size,
             bias=False,
@@ -385,7 +386,7 @@ class LlamaParallelAttention(MegatronModule):
         ## Rotary Position Embedding
         self.rotary_emb = RotaryEmbedding(self.hidden_size_per_attention_head, alpha=args.rope_alpha)
         # Output.
-        self.dense = mpu.RowParallelLinear(
+        self.dense = tensor_parallel.RowParallelLinear(
             projection_size,
             args.hidden_size,
             input_is_parallel=True,
@@ -728,9 +729,9 @@ class LlamaParallelTransformer(MegatronModule):
         self.checkpoint_num_layers = args.checkpoint_num_layers
 
         # Number of layers.
-        assert args.num_layers % mpu.get_pipeline_model_parallel_world_size() == 0, \
+        assert args.num_layers % parallel_state.get_pipeline_model_parallel_world_size() == 0, \
             'num_layers must be divisible by pipeline_model_parallel_size'
-        self.num_layers = args.num_layers // mpu.get_pipeline_model_parallel_world_size()
+        self.num_layers = args.num_layers // parallel_state.get_pipeline_model_parallel_world_size()
 
         # Transformer layers.
         def build_layer(layer_number):
@@ -754,12 +755,12 @@ class LlamaParallelTransformer(MegatronModule):
             # layers to stages like (each list is a model chunk):
             # Stage 0: [0, 1]  [4, 5]
             # Stage 1: [2, 3]  [6, 7]
-            offset = mpu.get_virtual_pipeline_model_parallel_rank() * (
+            offset = parallel_state.get_virtual_pipeline_model_parallel_rank() * (
                     args.num_layers // args.virtual_pipeline_model_parallel_size) + \
-                     (mpu.get_pipeline_model_parallel_rank() * self.num_layers)
+                     (parallel_state.get_pipeline_model_parallel_rank() * self.num_layers)
         else:
             # Each stage gets a contiguous set of layers.
-            offset = mpu.get_pipeline_model_parallel_rank() * self.num_layers
+            offset = parallel_state.get_pipeline_model_parallel_rank() * self.num_layers
 
         self.layers = []
         # Build the layers
@@ -798,10 +799,10 @@ class LlamaParallelTransformer(MegatronModule):
             return custom_forward
 
         # Make sure memory is freed.
-        mpu.reset_checkpointed_activations_memory_buffer()
+        tensor_parallel.reset_checkpointed_activations_memory_buffer()
         l = 0
         while l < self.num_layers:
-            hidden_states = mpu.checkpoint(
+            hidden_states = tensor_parallel.checkpoint(
                 custom(l, l + self.checkpoint_num_layers),
                 hidden_states, attention_mask)
             l += self.checkpoint_num_layers
@@ -880,7 +881,7 @@ def CrossEntropy(output, labels):
     labels, loss_mask = labels[0], labels[1]
 
     args = get_args()
-    losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
+    losses = tensor_parallel.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
     loss_mask = loss_mask.view(-1)
     loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
     return loss
@@ -945,9 +946,9 @@ class LlamaModelPipe(PipelineModule, MegatronModule):
             interval = 0
 
         from deepspeed.runtime.pipe.topology import PipeModelDataParallelTopology
-        topo = PipeModelDataParallelTopology(num_pp=mpu.get_pipeline_model_parallel_world_size(),
-                                             num_mp=mpu.get_tensor_model_parallel_world_size(),
-                                             num_dp=mpu.get_data_parallel_world_size())
+        topo = PipeModelDataParallelTopology(num_pp=parallel_state.get_pipeline_model_parallel_world_size(),
+                                             num_mp=parallel_state.get_tensor_model_parallel_world_size(),
+                                             num_dp=parallel_state.get_data_parallel_world_size())
 
         if args.pp_partition_method is not None:
             partition_method = args.pp_partition_method
@@ -1040,9 +1041,9 @@ class LlamaModel(MegatronModule):
             else:
                 if self.fp16_lm_cross_entropy:
                     assert hidden_states.dtype == torch.half
-                    loss = mpu.vocab_parallel_cross_entropy(hidden_states, labels)
+                    loss = tensor_parallel.vocab_parallel_cross_entropy(hidden_states, labels)
                 else:
-                    loss = mpu.vocab_parallel_cross_entropy(hidden_states.float(), labels)
+                    loss = tensor_parallel.vocab_parallel_cross_entropy(hidden_states.float(), labels)
                 return loss
 
         return hidden_states
