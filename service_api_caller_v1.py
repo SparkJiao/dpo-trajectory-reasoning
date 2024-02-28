@@ -81,7 +81,7 @@ def run_inference(cfg: DictConfig, dataset):
 @hydra.main(config_path="conf", config_name="config", version_base="1.2")
 def main(cfg: DictConfig):
     global logger
-    logger = setting_logger(cfg.output_file, local_rank=cfg.local_rank)
+    logger = setting_logger("", local_rank=cfg.local_rank)
     logger.warning(f"CPU cores: {os.cpu_count()}")
 
     # Set seed

@@ -435,6 +435,10 @@ class LlamaModelForSequenceClassificationForRL(LlamaModelForSequenceClassificati
         values, rewards, sequence_lengths = llama_last_token_forward_value(self.model, self.score, input_ids, attention_mask, self.config.pad_token_id)
         values = self.logit2prob(values)
         rewards = self.logit2prob(rewards)
+
+        value_mask = input_ids.eq(self.config.pad_token_id)
+        values = values.masked_fill(value_mask, 0)
+
         return RewardModelOutput(
             values=values,
             chosen_end_scores=rewards,

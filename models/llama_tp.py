@@ -464,8 +464,6 @@ class LlamaModelParallelPreSplitMixin(PreTrainedModelPeftMixin):
     ):
         if mpu.model_parallel_is_initialized():
             mp_rank = mpu.get_model_parallel_rank()
-            if not os.path.exists(save_directory):
-                os.makedirs(save_directory)
             save_directory = os.path.join(save_directory, f"mp_{mp_rank}-of-{mpu.get_model_parallel_world_size()}")
         super().save_pretrained(save_directory, *args, **kwargs)
 
@@ -550,8 +548,8 @@ class LlamaForCausalLM(LlamaModelParallelPreSplitMixin, HfLlamaForCausalLM):
 class LlamaModelForSequenceClassificationForRL(LlamaModelParallelPreSplitMixin, LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig, reduction_ids: List[int]):
         super().__init__(config)
-        self.model = LlamaModel(config)
-        self.score = ColumnParallelLinear(config.hidden_size, config.num_labels, bias=False)
+        self.model = LlamaModelParallel(config)
+        self.score = nn.Linear(config.hidden_size, config.num_labels, bias=False)
 
         if isinstance(reduction_ids, omegaconf.ListConfig):
             reduction_ids = list(reduction_ids)
@@ -577,6 +575,10 @@ class LlamaModelForSequenceClassificationForRL(LlamaModelParallelPreSplitMixin, 
         values, rewards, sequence_lengths = llama_last_token_forward_value(self.model, self.score, input_ids, attention_mask, self.config.pad_token_id)
         values = self.logit2prob(values)
         rewards = self.logit2prob(rewards)
+
+        value_mask = input_ids.eq(self.config.pad_token_id)
+        values = values.masked_fill(value_mask, 0)
+
         return RewardModelOutput(
             values=values,
             chosen_end_scores=rewards,

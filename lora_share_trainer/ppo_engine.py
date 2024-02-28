@@ -9,29 +9,26 @@ import time
 from typing import Union, Callable
 
 import deepspeed
+import fairscale.nn.model_parallel.initialize as mpu
 import torch
 import torch.distributed as dist
-from deepspeed.utils.zero_to_fp32 import get_fp32_state_dict_from_zero_checkpoint
 from omegaconf import OmegaConf, DictConfig
 from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedModel
 from transformers.generation import GenerationConfig
-from transformers.utils import ContextManagers
 
 from general_util import training_utils
 from general_util.dist_utils import print_rank_0
 from general_util.logger import get_child_logger
-from general_util.training_utils import unwrap_model, get_zero_stage
+from general_util.training_utils import get_zero_stage
 from general_util.transformer_engine import convert_model
 
-import fairscale.nn.model_parallel.initialize as mpu
+logger = get_child_logger(__name__)
 
 try:
     import transformer_engine.pytorch as transformer_engine
     from transformer_engine.common import recipe
 except ImportError:
-    pytest.skip("Transformer Engine package is missing, skipping tests", allow_module_level=True)
-
-logger = get_child_logger(__name__)
+    logger.info("Transformer Engine package is missing, skipping tests")
 
 
 def log_init(model_name, stime=None):
@@ -136,6 +133,7 @@ class DeepSpeedChatPPOEngine:
             )
         else:
             ref_engine = actor_model_or_reward_model
+            ref_engine.to(device=torch.cuda.current_device() if torch.cuda.is_available() else "cpu")
 
         log_init("Reference", stime)
 
@@ -207,6 +205,7 @@ class DeepSpeedChatPPOEngine:
             )
         else:
             ref_engine = reward_model
+            ref_engine.to(device=torch.cuda.current_device() if torch.cuda.is_available() else "cpu")
 
         log_init("Reward", stime)
 
@@ -225,38 +224,38 @@ def react_process_reward(reduction: str = "none"):
 
         from data.general import extract_react_ending_positions_v2
 
-        full_text = tokenizer.batch_decode(seq, skip_special_tokens=True)
+        full_text = tokenizer.batch_decode(seq, skip_special_tokens=True)  # Here the `eos` token is already overlooked.
 
         rewards = rm_outputs["values"].new_zeros(rm_outputs["values"].size())
         values = rm_outputs["values"]
         for i in range(seq.shape[0]):
-            seq_right_padding = seq[i].eq(tokenizer.pad_token_id).sum().item()
+            seq_left_padding = seq[i, :prompt_len].eq(tokenizer.pad_token_id).sum().item()
 
             ending, _ = extract_react_ending_positions_v2(tokenizer, full_text[i], seq.shape[1])
             acc = None
             for j, e in enumerate(ending):
-                assert e + seq_right_padding >= prompt_len
+                assert e + seq_left_padding >= prompt_len
 
                 if reduction == "sum":
                     if j == 0:
-                        acc = values[i, e + seq_right_padding]
+                        acc = values[i, e + seq_left_padding]
                     else:
-                        acc += values[i, e + seq_right_padding]
-                    rewards[i, e + seq_right_padding] = acc
+                        acc += values[i, e + seq_left_padding]
+                    rewards[i, e + seq_left_padding] = acc
                 elif reduction == "min":
                     if j == 0:
-                        acc = values[i, e + seq_right_padding]
+                        acc = values[i, e + seq_left_padding]
                     else:
-                        acc = min(acc, values[i, e + seq_right_padding])
-                    rewards[i, e + seq_right_padding] = acc
+                        acc = min(acc, values[i, e + seq_left_padding])
+                    rewards[i, e + seq_left_padding] = acc
                 elif reduction == "prod":
                     if j == 0:
-                        acc = values[i, e + seq_right_padding]
+                        acc = values[i, e + seq_left_padding]
                     else:
-                        acc *= values[i, e + seq_right_padding]
-                    rewards[i, e + seq_right_padding] = acc
+                        acc *= values[i, e + seq_left_padding]
+                    rewards[i, e + seq_left_padding] = acc
                 elif reduction == "none":
-                    rewards[i, e + seq_right_padding] = values[i, e + seq_right_padding]
+                    rewards[i, e + seq_left_padding] = values[i, e + seq_left_padding]
                 else:
                     raise ValueError(f"Unknown reduction: {reduction}")
 
@@ -265,13 +264,14 @@ def react_process_reward(reduction: str = "none"):
     return func
 
 
-def gather_log_probs(logits, labels):
+def gather_log_probs(logits, labels, pad_token_id: int):
     log_probs = torch.log_softmax(logits, dim=-1)
     log_probs_labels = log_probs.gather(dim=-1, index=labels.unsqueeze(-1))
-    return log_probs_labels.squeeze(-1)
+    loss_mask = labels.ne(pad_token_id)
+    return log_probs_labels.squeeze(-1) * loss_mask
 
 
-def fp8_func_wrap(func: Callable, fp8_flag: bool, fp8_recipe: recipe.DelayedScaling, *args, **kwargs):
+def fp8_func_wrap(func: Callable, fp8_flag: bool, fp8_recipe, *args, **kwargs):
     if fp8_flag:
         with transformer_engine.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe):
             return func(*args, **kwargs)
@@ -361,7 +361,7 @@ class DSChatPPOTrainer:
         ans = seq[:, prompt_length:]
         valid_ans_len = (ans != self.tokenizer.pad_token_id).sum(dim=-1)
 
-        if self.cfg.print_answers:
+        if self.cfg.print_answers and step % 5 == 0:
             print(
                 f"--- prompt --> step={step}, rank={torch.distributed.get_rank()}, {self.tokenizer.batch_decode(prompt_input_ids, skip_special_tokens=True)}"
             )
@@ -385,7 +385,7 @@ class DSChatPPOTrainer:
 
         self.eval()
         generate_start = time.time()
-        seq = self._generate_sequence(prompt_input_ids, mask, global_step)
+        seq = self._generate_sequence(prompt_input_ids, mask, global_step)  # `seq` should have special tokens.
         generate_end = time.time()
         self.train()
 
@@ -408,8 +408,8 @@ class DSChatPPOTrainer:
 
         return {
             'prompt_input_ids': prompt_input_ids,
-            'logprobs': gather_log_probs(logits[:, :-1, :], seq[:, 1:]),
-            'ref_logprobs': gather_log_probs(logits_ref[:, :-1, :], seq[:, 1:]),
+            'logprobs': gather_log_probs(logits[:, :-1, :], seq[:, 1:], self.actor_model.module.config.pad_token_id),
+            'ref_logprobs': gather_log_probs(logits_ref[:, :-1, :], seq[:, 1:], self.actor_model.module.config.pad_token_id),
             'values': values,
             'rewards': reward_score,
             'input_ids': seq,
@@ -417,18 +417,40 @@ class DSChatPPOTrainer:
         }
 
     def compute_rewards(self, prompt_input_ids, log_probs, ref_log_probs, reward_score, action_mask):
+        """
 
-        kl_divergence_estimate = -self.kl_ctl * (log_probs - ref_log_probs)
-        rewards = kl_divergence_estimate
+        :param prompt_input_ids:
+        :param log_probs:
+        :param ref_log_probs:
+        :param reward_score: shares the same length with `values`: n.
+        :param action_mask: length: n - 1, already shifted to the right by 1.
+        :return:
+        """
+        kl_divergence_estimate = -self.kl_ctl * (log_probs - ref_log_probs)  # Actual length of full conversation - 1
+        rewards = kl_divergence_estimate  # [batch, n - 1]
+        assert rewards.shape[1] == reward_score.shape[1] - 1
         start = prompt_input_ids.shape[1] - 1  # The log_probs and ref_log_probs are calculated from the second token.
-        ends = start + action_mask[:, start:].sum(1) + 1
-        reward_clip = torch.clamp(reward_score, -self.clip_reward_value, self.clip_reward_value)[:, start:]
+        ends = start + action_mask[:, start:].sum(1) + 1  # `ends` demonstrate the actual length of the conversation plus 1.
+        reward_clip = torch.clamp(reward_score, -self.clip_reward_value, self.clip_reward_value)  # The last token should be the `eos` token.  # [batch(, n)]
         batch_size = log_probs.shape[0]
-        for j in range(batch_size):
-            if len(reward_clip.size()) > 1:
-                rewards[j, start:ends[j]] += reward_clip[j][1:]  # TODO: I'm not sure for process rewards, it should be reward_clip[1:] or reward_clip[:-1].
-            else:
-                rewards[j, start:ends[j]][-1] += reward_clip[j]
+        # for j in range(batch_size):
+        #     if len(reward_clip.size()) > 1:
+        #         # rewards[j, start:ends[j]] += reward_clip[j][1:]  # TODO: I'm not sure for process rewards, it should be reward_clip[1:] or reward_clip[:-1].
+        #         # [start, ends[j]] is the response part in `rewards` because the log_probs and ref_log_probs are calculated from the second token.
+        #         # The maximum value of `ends` is bigger than the length of `rewards` with 1.
+        #         # [start + 1, ends[j]] is the response part in the full sequence, e.g., `reward_clip` and `values`.
+        #         # `reward_clip` are the rewards assigned to each token that can be obtained only when they are really being approached.
+        #         rewards[j, start:(ends[j] - 1)] += reward_clip[j, (start + 1):ends[j]]
+        #     else:
+        #         # rewards[j, start:ends[j]][-1] += reward_clip[j]
+        #         rewards[j, start:(ends[j] - 1)][-1] += reward_clip[j]
+        if len(reward_clip.size()) > 1:
+            reward_clip = reward_clip[:, 1:]
+            reward_clip[:, :start] = 0
+            reward_clip[~(action_mask.bool())] = 0
+            rewards += reward_clip
+        else:  # [batch]
+            rewards[:, ends - 1] += reward_clip
 
         return rewards
 
@@ -492,16 +514,19 @@ class DSChatPPOTrainer:
             ends = start + action_mask[:, start:].sum(1) + 1
             # we need to zero out the reward and value after the end of the conversation
             # otherwise the advantage/return will be wrong
-            for i in range(old_rewards.shape[0]):
-                old_rewards[i, ends[i]:] = 0
-                old_values[i, ends[i]:] = 0
+            # for i in range(old_rewards.shape[0]):
+            # old_rewards[i, ends[i]:] = 0  # TODO: Should we also modify this to correspond to line 443?
+            # old_values[i, ends[i]:] = 0
+            # old_rewards[i, (ends[i] - 1):] = 0
+            # old_values[i, (ends[i] - 1):] = 0
+            old_rewards[~(action_mask.bool())] = 0
+            old_values[~(action_mask.bool())] = 0
             advantages, returns = self.get_advantages_and_returns(old_values, old_rewards, start)
 
         # process the new outputs
         batch = {'input_ids': seq, "attention_mask": attention_mask}
-        # actor_prob = fp8_func_wrap(self.actor_model, self.actor_fp8, self.fp8_recipe, **batch, use_cache=False).logits
         actor_prob = fp8_func_wrap(self.actor_model, self.actor_fp8, self.fp8_recipe, **batch).logits
-        actor_log_prob = gather_log_probs(actor_prob[:, :-1, :], seq[:, 1:])
+        actor_log_prob = gather_log_probs(actor_prob[:, :-1, :], seq[:, 1:], self.actor_model.module.config.pad_token_id)
         actor_loss = self.actor_loss_fn(actor_log_prob[:, start:], log_probs[:, start:], advantages, action_mask[:, start:])
         self.actor_model.backward(actor_loss)
 
@@ -535,10 +560,15 @@ class DSChatPPOTrainer:
 
         self.critic_model.step()
 
+        if len(reward_score.size()) > 1:
+            log_reward = reward_score.sum(dim=1).mean()
+        else:
+            log_reward = reward_score.mean()
         return {
             "actor_loss": actor_loss,
             "critic_loss": critic_loss,
             "return": returns.mean(),
+            "reward": log_reward,
         }
 
     def get_overflow(self):
@@ -570,13 +600,37 @@ class DSChatPPOTrainer:
             actor_save_dir = os.path.join(output_dir, "actor")
             critic_save_dir = os.path.join(output_dir, "critic")
 
+        if self.cfg.local_rank in [-1, 0]:
+            if not os.path.exists(actor_save_dir):
+                os.makedirs(actor_save_dir, exist_ok=True)
+            if not os.path.exists(critic_save_dir):
+                os.makedirs(critic_save_dir, exist_ok=True)
+
+        if dist.is_initialized():
+            dist.barrier()
+
         # Actor model
-        self._save_single_model(self.actor_model, actor_save_dir, self.cfg.local_rank, get_zero_stage(self.cfg.actor_ds_config), tokenizer=self.tokenizer)
+        self._save_single_model(self.actor_model,
+                                actor_save_dir,
+                                self.cfg.local_rank,
+                                get_zero_stage(self.cfg.actor_ds_config),
+                                tokenizer=self.tokenizer,
+                                save_ds_state=self.cfg.save_ds_state,
+                                state_save_dir=os.path.join(output_dir, "actor"),
+                                )
 
         # Critic model
-        self._save_single_model(self.critic_model, critic_save_dir, self.cfg.local_rank, get_zero_stage(self.cfg.critic_ds_config), tokenizer=self.tokenizer)
+        self._save_single_model(self.critic_model,
+                                critic_save_dir,
+                                self.cfg.local_rank,
+                                get_zero_stage(self.cfg.critic_ds_config),
+                                save_ds_state=self.cfg.save_ds_state,
+                                tokenizer=self.tokenizer,
+                                state_save_dir=os.path.join(output_dir, "critic"),
+                                )
 
-        OmegaConf.save(self.cfg, os.path.join(output_dir, "training_config.yaml"))
+        if self.cfg.local_rank in [-1, 0]:
+            OmegaConf.save(self.cfg, os.path.join(output_dir, "training_config.yaml"))
 
     @staticmethod
     def _save_single_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine],
@@ -584,34 +638,35 @@ class DSChatPPOTrainer:
                            local_rank: int,
                            zero_stage: int = 1,
                            save_ds_state: bool = False,
-                           tokenizer: PreTrainedTokenizer = None, ):
+                           tokenizer: PreTrainedTokenizer = None,
+                           state_save_dir: str = None, ):
         unwrapped_model = model.module
         assert isinstance(unwrapped_model, PreTrainedModel)
 
-        if not save_ds_state:
-            if zero_stage == 3:
-                logger.warning("Deepspeed ZeRO-3 has to save checkpoint states since the model is sharded.")
-                save_ds_state = True
-
         if save_ds_state:
-            model.save_checkpoint(output_dir)
+            model.save_checkpoint(state_save_dir)
 
         if zero_stage == 3:
             state_dict = model._zero3_consolidated_16bit_state_dict()
         else:
-            state_dict = model.module.state_dict()
+            state_dict = unwrapped_model.state_dict()
 
-        if dist.is_initialized() and local_rank != 0:
+        if mpu.model_parallel_is_initialized():
+            dp_rank = mpu.get_data_parallel_rank()
+        else:
+            dp_rank = local_rank
+
+        if dist.is_initialized() and dp_rank != 0:
             dist.barrier()
 
-        if local_rank in [-1, 0]:
+        if dp_rank in [-1, 0]:
             unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, safe_serialization=False)
 
-            if tokenizer is not None:
-                tokenizer.save_pretrained(output_dir)
+            if local_rank in [-1, 0]:
+                if tokenizer is not None:
+                    tokenizer.save_pretrained(output_dir)
 
-            # OmegaConf.save(cfg, os.path.join(output_dir, "training_config.yaml"))
-            logger.info("Saving model checkpoint to %s", output_dir)
+                logger.info("Saving model checkpoint to %s", output_dir)
 
             if dist.is_initialized():
                 dist.barrier()

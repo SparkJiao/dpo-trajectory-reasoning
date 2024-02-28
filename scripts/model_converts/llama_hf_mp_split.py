@@ -5,9 +5,10 @@ from glob import glob
 
 import torch
 from safetensors import safe_open
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
 from transformers.models.llama import LlamaForCausalLM, LlamaConfig
 from accelerate import init_empty_weights
+from glob import glob
 
 
 # permute for sliced rotary
@@ -36,7 +37,7 @@ def split_weights(state_dict: OrderedDict, tp_size: int):
         else:
             for i in range(tp_size):
                 new_state_dicts[i][k] = v.detach().clone()
-
+    print(new_state_dicts[0].keys())
     return new_state_dicts
 
 
@@ -64,12 +65,27 @@ def merge_weights(state_dicts: list, merge_avg: bool = False):
 
 
 def write_model(input_base_path, tp_size: int):
-    model = LlamaForCausalLM.from_pretrained(input_base_path, torch_dtype="auto", device_map="cpu")
+    # model = LlamaForCausalLM.from_pretrained(input_base_path, torch_dtype="auto", device_map="cpu")
+    config = LlamaConfig.from_pretrained(input_base_path)
+    with init_empty_weights():
+        model = AutoModel.from_config(config)
     tokenizer = AutoTokenizer.from_pretrained(input_base_path)
 
-    new_state_dicts = split_weights(model.state_dict(), tp_size)
+    weights = OrderedDict()
+    files = glob(os.path.join(input_base_path, "*.safetensors"))
+    if len(files):
+        for weight_path in files:
+            with safe_open(weight_path, framework="pt", device="cpu") as f:
+                for key in f.keys():
+                    weights[key] = f.get_tensor(key).clone()
+    else:
+        for weight_path in glob(os.path.join(input_base_path, "pytorch_model*.bin")):
+            weights.update(torch.load(weight_path, map_location="cpu"))
+
+    new_state_dicts = split_weights(weights, tp_size)
     for i, state_dict in enumerate(new_state_dicts):
         output_folder = os.path.join(input_base_path, f"mp_{i}-of-{tp_size}")
+        assert not os.path.exists(output_folder), f"Folder {output_folder} already exists. Please remove it before splitting."
         os.makedirs(output_folder, exist_ok=True)
         model.save_pretrained(output_folder, state_dict=state_dict, safe_serialization=False)
         tokenizer.save_pretrained(output_folder)
@@ -83,7 +99,8 @@ def merge_model(input_base_path, tp_size: int, merge_avg: bool = False):
     tokenizer = AutoTokenizer.from_pretrained(input_base_path)
 
     state_dicts = []
-    for folder in glob(os.path.join(input_base_path, f"mp_*-of-{tp_size}")):
+    for i in range(tp_size):
+        folder = os.path.join(input_base_path, f"mp_{i}-of-{tp_size}")
         print(folder)
         weights = {}
         files = glob(os.path.join(folder, "*.safetensors"))
@@ -93,8 +110,12 @@ def merge_model(input_base_path, tp_size: int, merge_avg: bool = False):
                     for key in f.keys():
                         weights[key] = f.get_tensor(key).clone()
         else:
-            for weight_path in glob(os.path.join(folder, "*.bin")):
+            for weight_path in glob(os.path.join(folder, "pytorch_model*.bin")):
                 weights.update(torch.load(weight_path, map_location="cpu"))
+
+        for k in weights.keys():
+            if weights[k].dtype != config.torch_dtype:
+                weights[k] = weights[k].to(config.torch_dtype)
         state_dicts.append(weights)
 
     merged_state_dict = merge_weights(state_dicts, merge_avg)
@@ -102,10 +123,14 @@ def merge_model(input_base_path, tp_size: int, merge_avg: bool = False):
         output_folder = os.path.join(input_base_path, "merged_avg")
         model.save_pretrained(output_folder, state_dict=merged_state_dict, safe_serialization=False)
         tokenizer.save_pretrained(output_folder)
+        config.save_pretrained(output_folder)
         print(f"Model saved to {output_folder}")
     else:
+        tmp_files = glob(os.path.join(input_base_path, "pytorch_model*.bin"))
+        assert len(tmp_files) == 0, "Found existing pytorch_model*.bin files. Please remove them before merging."
         model.save_pretrained(input_base_path, state_dict=merged_state_dict, safe_serialization=False)
         # tokenizer.save_pretrained(input_base_path)
+        config.save_pretrained(input_base_path)
         print(f"Model saved to {input_base_path}")
 
 
@@ -117,19 +142,26 @@ def main():
     )
     parser.add_argument("--tp_size", help="Tensor model parallel size.", default=2, type=int)
     parser.add_argument("--do_split", help="Split the model into shards.", action="store_true", default=False)
-    parser.add_argument("--merge_avg", help="Merge the model shards using average.", action="store_true")
+    parser.add_argument("--merge_avg", help="Merge the model shards using average.", action="store_true", default=False)
     args = parser.parse_args()
-    if args.do_split:
-        write_model(
-            input_base_path=args.input_dir,
-            tp_size=args.tp_size,
-        )
+
+    if os.path.exists(args.input_dir):
+        input_dirs = [args.input_dir]
     else:
-        merge_model(
-            input_base_path=args.input_dir,
-            tp_size=args.tp_size,
-            merge_avg=args.merge_avg,
-        )
+        input_dirs = list(glob(args.input_dir))
+    print(input_dirs)
+    for _dir in input_dirs:
+        if args.do_split:
+            write_model(
+                input_base_path=_dir,
+                tp_size=args.tp_size,
+            )
+        else:
+            merge_model(
+                input_base_path=_dir,
+                tp_size=args.tp_size,
+                merge_avg=args.merge_avg,
+            )
 
 
 if __name__ == "__main__":
