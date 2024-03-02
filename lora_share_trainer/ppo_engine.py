@@ -6,6 +6,7 @@
 
 import os
 import time
+
 from typing import Union, Callable
 
 import deepspeed
@@ -21,6 +22,9 @@ from general_util.dist_utils import print_rank_0
 from general_util.logger import get_child_logger
 from general_util.training_utils import get_zero_stage
 from general_util.transformer_engine import convert_model
+from lora_share_trainer.utils.fp8 import fp8_func_wrap
+from lora_share_trainer.utils.utils import log_init, gather_log_probs, trainer_save_single_model
+from lora_share_trainer.utils.post_process import react_process_reward
 
 logger = get_child_logger(__name__)
 
@@ -29,20 +33,6 @@ try:
     from transformer_engine.common import recipe
 except ImportError:
     logger.info("Transformer Engine package is missing, skipping tests")
-
-
-def log_init(model_name, stime=None):
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        tag = "start" if stime is None else "end"
-        suffix = "ing" if stime is None else "ed"
-        duration = ""
-        if stime is not None:
-            duration = "(duration: {:.2f}s)".format(time.time() - stime)
-        msg = f"[{tag}] Initializ{suffix} {model_name} Model [{tag}] {duration}"
-        stars = (90 - len(msg)) // 2
-        extra_star = "*" if (90 - len(msg)) % 2 == 1 else ""
-        print("*" * stars + msg + "*" * stars + extra_star)
-        return time.time()
 
 
 class DeepSpeedChatPPOEngine:
@@ -146,15 +136,19 @@ class DeepSpeedChatPPOEngine:
         # if "total_num_steps" in ds_config.scheduler.params:
         #     ds_config.scheduler.params.total_num_steps = self.cfg.max_steps
         # ds_config.scheduler.params.warmup_num_steps = self.cfg.warmup_steps
+        if ds_config.zero_optimization.stage != 3:
+            ds_config.zero_optimization.stage = 0
+
         ds_config = OmegaConf.to_container(ds_config, resolve=True)
         ds_config["train_mirco_batch_size_per_gpu"] = self.cfg.per_gpu_train_batch_size
         # ds_config["train_batch_size"] = self.cfg.per_gpu_train_batch_size * self.cfg.gradient_accumulation_steps_actor
-
-        # optim_params = training_utils.get_optimizer_grouped_parameters(actor_model, self.cfg.actor_weight_decay)
+        if "optimizer" in ds_config:
+            ds_config.pop("optimizer")
+        if "scheduler" in ds_config:
+            ds_config.pop("scheduler")
 
         actor_engine, *_ = deepspeed.initialize(
             model=actor_model,
-            # model_parameters=optim_params,
             config_params=ds_config,
             mpu=mpu if mpu.model_parallel_is_initialized() else None,
         )
@@ -212,73 +206,6 @@ class DeepSpeedChatPPOEngine:
         return ref_engine
 
 
-def react_process_reward(reduction: str = "none"):
-    # I think this can also be implemented inside the reward model.
-    # According to the definition, the reduction shouldn't be used?
-    def func(prompt_input_ids: torch.LongTensor,
-             seq: torch.LongTensor,
-             rm_outputs,
-             tokenizer: PreTrainedTokenizer
-             ):
-        prompt_len = prompt_input_ids.shape[1]
-
-        from data.general import extract_react_ending_positions_v2
-
-        full_text = tokenizer.batch_decode(seq, skip_special_tokens=True)  # Here the `eos` token is already overlooked.
-
-        rewards = rm_outputs["values"].new_zeros(rm_outputs["values"].size())
-        values = rm_outputs["values"]
-        for i in range(seq.shape[0]):
-            seq_left_padding = seq[i, :prompt_len].eq(tokenizer.pad_token_id).sum().item()
-
-            ending, _ = extract_react_ending_positions_v2(tokenizer, full_text[i], seq.shape[1])
-            acc = None
-            for j, e in enumerate(ending):
-                assert e + seq_left_padding >= prompt_len
-
-                if reduction == "sum":
-                    if j == 0:
-                        acc = values[i, e + seq_left_padding]
-                    else:
-                        acc += values[i, e + seq_left_padding]
-                    rewards[i, e + seq_left_padding] = acc
-                elif reduction == "min":
-                    if j == 0:
-                        acc = values[i, e + seq_left_padding]
-                    else:
-                        acc = min(acc, values[i, e + seq_left_padding])
-                    rewards[i, e + seq_left_padding] = acc
-                elif reduction == "prod":
-                    if j == 0:
-                        acc = values[i, e + seq_left_padding]
-                    else:
-                        acc *= values[i, e + seq_left_padding]
-                    rewards[i, e + seq_left_padding] = acc
-                elif reduction == "none":
-                    rewards[i, e + seq_left_padding] = values[i, e + seq_left_padding]
-                else:
-                    raise ValueError(f"Unknown reduction: {reduction}")
-
-        return rewards
-
-    return func
-
-
-def gather_log_probs(logits, labels, pad_token_id: int):
-    log_probs = torch.log_softmax(logits, dim=-1)
-    log_probs_labels = log_probs.gather(dim=-1, index=labels.unsqueeze(-1))
-    loss_mask = labels.ne(pad_token_id)
-    return log_probs_labels.squeeze(-1) * loss_mask
-
-
-def fp8_func_wrap(func: Callable, fp8_flag: bool, fp8_recipe, *args, **kwargs):
-    if fp8_flag:
-        with transformer_engine.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe):
-            return func(*args, **kwargs)
-    else:
-        return func(*args, **kwargs)
-
-
 class DSChatPPOTrainer:
     def __init__(self, engine: DeepSpeedChatPPOEngine, cfg: DictConfig,
                  reward_post_fn: Callable = react_process_reward(),
@@ -310,6 +237,9 @@ class DSChatPPOTrainer:
         self.gamma = getattr(cfg, "gamma", 1.0)
         self.lam = getattr(cfg, "lam", 0.95)
         self.generate_time = getattr(cfg, "generate_time", 1)
+
+        # EMA
+        self.enable_ema = cfg.enable_ema
 
         self.reward_post_fn = reward_post_fn
 
@@ -377,7 +307,7 @@ class DSChatPPOTrainer:
                 out_seq.append(seq[i:i + 1])
         out_seq = torch.cat(out_seq, dim=0)  # concate output in the batch dim
 
-        return out_seq
+        return {"seq": out_seq}
 
     def generate_experience(self, input_ids, attention_mask, global_step):
         prompt_input_ids = input_ids
@@ -385,7 +315,7 @@ class DSChatPPOTrainer:
 
         self.eval()
         generate_start = time.time()
-        seq = self._generate_sequence(prompt_input_ids, mask, global_step)  # `seq` should have special tokens.
+        seq = self._generate_sequence(prompt_input_ids, mask, global_step)["seq"]  # `seq` should have special tokens.
         generate_end = time.time()
         self.train()
 
@@ -473,8 +403,7 @@ class DSChatPPOTrainer:
         log_ratio = (logprobs - old_logprobs) * mask
         ratio = torch.exp(log_ratio)
         pg_loss1 = -advantages * ratio
-        pg_loss2 = -advantages * torch.clamp(ratio, 1.0 - self.clip_range,
-                                             1.0 + self.clip_range)
+        pg_loss2 = -advantages * torch.clamp(ratio, 1.0 - self.clip_range, 1.0 + self.clip_range)
         pg_loss = torch.sum(torch.max(pg_loss1, pg_loss2) * mask) / mask.sum()
         return pg_loss
 
@@ -520,7 +449,7 @@ class DSChatPPOTrainer:
             # old_rewards[i, (ends[i] - 1):] = 0
             # old_values[i, (ends[i] - 1):] = 0
             old_rewards[~(action_mask.bool())] = 0
-            old_values[~(action_mask.bool())] = 0
+            old_values[~(action_mask.bool())] = 0  # Since the advantages are computed since `start`, we do not need to mask the response inputs here.
             advantages, returns = self.get_advantages_and_returns(old_values, old_rewards, start)
 
         # process the new outputs
@@ -610,66 +539,49 @@ class DSChatPPOTrainer:
             dist.barrier()
 
         # Actor model
-        self._save_single_model(self.actor_model,
-                                actor_save_dir,
-                                self.cfg.local_rank,
-                                get_zero_stage(self.cfg.actor_ds_config),
-                                tokenizer=self.tokenizer,
-                                save_ds_state=self.cfg.save_ds_state,
-                                state_save_dir=os.path.join(output_dir, "actor"),
-                                )
+        trainer_save_single_model(self.actor_model,
+                                  actor_save_dir,
+                                  self.cfg.local_rank,
+                                  get_zero_stage(self.cfg.actor_ds_config),
+                                  tokenizer=self.tokenizer,
+                                  save_ds_state=self.cfg.save_ds_state,
+                                  state_save_dir=os.path.join(output_dir, "actor"),
+                                  )
 
         # Critic model
-        self._save_single_model(self.critic_model,
-                                critic_save_dir,
-                                self.cfg.local_rank,
-                                get_zero_stage(self.cfg.critic_ds_config),
-                                save_ds_state=self.cfg.save_ds_state,
-                                tokenizer=self.tokenizer,
-                                state_save_dir=os.path.join(output_dir, "critic"),
-                                )
+        trainer_save_single_model(self.critic_model,
+                                  critic_save_dir,
+                                  self.cfg.local_rank,
+                                  get_zero_stage(self.cfg.critic_ds_config),
+                                  save_ds_state=self.cfg.save_ds_state,
+                                  tokenizer=self.tokenizer,
+                                  state_save_dir=os.path.join(output_dir, "critic"),
+                                  )
 
-        if self.cfg.local_rank in [-1, 0]:
-            OmegaConf.save(self.cfg, os.path.join(output_dir, "training_config.yaml"))
-
-    @staticmethod
-    def _save_single_model(model: Union[deepspeed.DeepSpeedEngine, deepspeed.PipelineEngine],
-                           output_dir: str,
-                           local_rank: int,
-                           zero_stage: int = 1,
-                           save_ds_state: bool = False,
-                           tokenizer: PreTrainedTokenizer = None,
-                           state_save_dir: str = None, ):
-        unwrapped_model = model.module
-        assert isinstance(unwrapped_model, PreTrainedModel)
-
-        if save_ds_state:
-            model.save_checkpoint(state_save_dir)
-
-        if zero_stage == 3:
-            state_dict = model._zero3_consolidated_16bit_state_dict()
-        else:
-            state_dict = unwrapped_model.state_dict()
-
-        if mpu.model_parallel_is_initialized():
-            dp_rank = mpu.get_data_parallel_rank()
-        else:
-            dp_rank = local_rank
-
-        if dist.is_initialized() and dp_rank != 0:
-            dist.barrier()
-
-        if dp_rank in [-1, 0]:
-            unwrapped_model.save_pretrained(output_dir, state_dict=state_dict, safe_serialization=False)
-
-            if local_rank in [-1, 0]:
-                if tokenizer is not None:
-                    tokenizer.save_pretrained(output_dir)
-
-                logger.info("Saving model checkpoint to %s", output_dir)
+        if self.cfg.enable_ema:
+            if global_step != -1:
+                ema_save_dir = os.path.join(output_dir, "actor_ema", "checkpoint-{}".format(global_step))
+            else:
+                ema_save_dir = os.path.join(output_dir, "actor_ema")
+            if self.cfg.local_rank in [-1, 0]:
+                if not os.path.exists(ema_save_dir):
+                    os.makedirs(ema_save_dir, exist_ok=True)
 
             if dist.is_initialized():
                 dist.barrier()
+
+            # EMA model
+            trainer_save_single_model(self.engine.actor_ema,
+                                      ema_save_dir,
+                                      self.cfg.local_rank,
+                                      get_zero_stage(self.cfg.actor_ds_config),
+                                      save_ds_state=self.cfg.save_ds_state,
+                                      tokenizer=self.tokenizer,
+                                      state_save_dir=os.path.join(output_dir, "actor_ema"),
+                                      )
+
+        if self.cfg.local_rank in [-1, 0]:
+            OmegaConf.save(self.cfg, os.path.join(output_dir, "training_config.yaml"))
 
     def resume(self, checkpoint_dir):
         self.actor_model.load_checkpoint(checkpoint_dir)

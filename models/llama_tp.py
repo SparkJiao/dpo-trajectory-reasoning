@@ -31,7 +31,7 @@ from transformers.models.llama.modeling_llama import (
 
 from general_util.dist_utils import get_pipeline_parallel_rank, get_pipeline_parallel_world_size
 from general_util.logger import get_child_logger
-from models.llama import PreTrainedModelPeftMixin, llama_last_token_forward_value
+from models.llama import PreTrainedModelPeftMixin, llama_last_token_forward_value, llama_dpo_batch_forward
 from models.utils import DPOModelOutput, RewardModelOutput
 
 logger = get_child_logger(__name__)
@@ -443,6 +443,9 @@ class LlamaModelParallelPretrainedMixin(PreTrainedModelPeftMixin):
         return super().from_pretrained(pretrained_model_name_or_path, state_dict=state_dict, *model_args, **kwargs)
 
 
+REFERENCE_MODEL: LlamaPreTrainedModel
+
+
 class LlamaModelParallelPreSplitMixin(PreTrainedModelPeftMixin):
     @classmethod
     def from_pretrained(
@@ -466,6 +469,17 @@ class LlamaModelParallelPreSplitMixin(PreTrainedModelPeftMixin):
             mp_rank = mpu.get_model_parallel_rank()
             save_directory = os.path.join(save_directory, f"mp_{mp_rank}-of-{mpu.get_model_parallel_world_size()}")
         super().save_pretrained(save_directory, *args, **kwargs)
+
+    @classmethod
+    def from_pretrained_with_ref_model(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], ref_model: LlamaPreTrainedModel,
+                                       *model_args, **kwargs):
+        global REFERENCE_MODEL
+        REFERENCE_MODEL = ref_model
+        REFERENCE_MODEL.eval()
+        REFERENCE_MODEL.to(device=torch.cuda.current_device())
+
+        model = cls.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
+        return model
 
 
 class LlamaForCausalLM(LlamaModelParallelPreSplitMixin, HfLlamaForCausalLM):
@@ -584,3 +598,125 @@ class LlamaModelForSequenceClassificationForRL(LlamaModelParallelPreSplitMixin, 
             chosen_end_scores=rewards,
             sequence_lengths=sequence_lengths,
         )
+
+
+class LlamaForCausalLMDPO(LlamaForCausalLM):
+    def __init__(self, config, beta: float = 0.1, label_smoothing: float = 0.0, use_ipo: bool = False, loss_type: str = "sigmoid"):
+        super().__init__(config)
+        self.beta = beta
+        self.label_smoothing = label_smoothing
+        self.use_ipo = use_ipo
+        self.loss_type = loss_type
+        logger.warning(f"Using loss type: {self.loss_type}")
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    @torch.cuda.amp.autocast(enabled=True, dtype=torch.float32)
+    def dpo_loss(
+            self,
+            policy_chosen_logps: torch.FloatTensor,
+            policy_rejected_logps: torch.FloatTensor,
+            reference_chosen_logps: torch.FloatTensor,
+            reference_rejected_logps: torch.FloatTensor,
+            reference_free: bool = False,
+    ) -> Tuple[torch.FloatTensor, torch.FloatTensor, torch.FloatTensor]:
+        """Compute the DPO loss for a batch of policy and reference model log probabilities.
+
+        Args:
+            policy_chosen_logps: Log probabilities of the policy model for the chosen responses. Shape: (batch_size,)
+            policy_rejected_logps: Log probabilities of the policy model for the rejected responses. Shape: (batch_size,)
+            reference_chosen_logps: Log probabilities of the reference model for the chosen responses. Shape: (batch_size,)
+            reference_rejected_logps: Log probabilities of the reference model for the rejected responses. Shape: (batch_size,)
+            beta: Temperature parameter for the DPO loss, typically something in the range of 0.1 to 0.5. We ignore the reference model as beta -> 0.
+            reference_free: If True, we ignore the _provided_ reference model and implicitly use a reference model that assigns equal probability to all responses.
+
+        Returns:
+            A tuple of three tensors: (losses, chosen_rewards, rejected_rewards).
+            The losses tensor contains the DPO loss for each example in the batch.
+            The chosen_rewards and rejected_rewards tensors contain the rewards for the chosen and rejected responses, respectively.
+        """
+        pi_logratios = policy_chosen_logps - policy_rejected_logps
+        ref_logratios = reference_chosen_logps - reference_rejected_logps
+
+        if reference_free:
+            ref_logratios = 0
+
+        logits = pi_logratios - ref_logratios
+
+        if self.use_ipo:
+            losses = (logits - 1 / (2 * self.beta)) ** 2
+        elif self.loss_type == "hinge":
+            losses = torch.relu(1 - self.beta * logits)
+        elif self.loss_type == "sigmoid":
+            log_sigmoid = nn.LogSigmoid()
+            losses = -log_sigmoid(self.beta * logits) * (1 - self.label_smoothing) - log_sigmoid(-self.beta * logits) * self.label_smoothing
+        else:
+            raise ValueError(f"Unsupported loss type: {self.loss_type}")
+
+        chosen_rewards = self.beta * (policy_chosen_logps - reference_chosen_logps).detach()
+        rejected_rewards = self.beta * (policy_rejected_logps - reference_rejected_logps).detach()
+
+        return losses.mean(), chosen_rewards, rejected_rewards
+
+    def forward(
+            self,
+            input_ids: torch.LongTensor = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            labels: Optional[torch.LongTensor] = None,
+            use_cache: Optional[bool] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
+            **kwargs,
+    ) -> Union[Tuple, DPOModelOutput]:
+        half = input_ids.size(0) // 2
+
+        policy_logits, policy_logprobs, policy_loss_mask = llama_dpo_batch_forward(self, input_ids, attention_mask, labels)
+        with torch.no_grad():
+            ref_logits, ref_logprobs, ref_loss_mask = llama_dpo_batch_forward(REFERENCE_MODEL, input_ids, attention_mask, labels)
+
+        policy_chosen_logits, policy_reject_logits = policy_logits[:half], policy_logits[half:]
+        policy_chosen_logprobs, policy_reject_logprobs = policy_logprobs[:half], policy_logprobs[half:]
+
+        # ref_chosen_logits, ref_reject_logits = ref_logits[:half], ref_logits[half:]
+        ref_chosen_logprobs, ref_reject_logprobs = ref_logprobs[:half], ref_logprobs[half:]
+
+        loss, chosen_rewards, rejected_rewards = self.dpo_loss(
+            policy_chosen_logps=policy_chosen_logprobs,
+            policy_rejected_logps=policy_reject_logprobs,
+            reference_chosen_logps=ref_chosen_logprobs,
+            reference_rejected_logps=ref_reject_logprobs,
+            reference_free=False,
+        )
+
+        return DPOModelOutput(
+            loss=loss,
+            chosen_reward=chosen_rewards.mean(),
+            rejected_reward=rejected_rewards.mean(),
+            policy_chosen_logits=policy_chosen_logits,
+            policy_rejected_logits=policy_reject_logits,
+        )
+
+    def save_pretrained(
+            self,
+            save_directory: Union[str, os.PathLike],
+            is_main_process: bool = True,
+            state_dict: Optional[dict] = None,
+            save_function: Callable = torch.save,
+            push_to_hub: bool = False,
+            max_shard_size: Union[int, str] = "5GB",
+            safe_serialization: bool = True,
+            variant: Optional[str] = None,
+            token: Optional[Union[str, bool]] = None,
+            save_peft_format: bool = True,
+            **kwargs,
+    ):
+        super().save_pretrained(save_directory, is_main_process, state_dict, save_function, push_to_hub, max_shard_size, safe_serialization, variant, token,
+                                **kwargs)
+
+        if is_main_process:
+            config = self.config
+            config.architectures = ["LlamaForCausalLM"]
+            config.save_pretrained(save_directory)
+            logger.warning("Config architecture is override to LlamaForCausalLM")

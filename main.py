@@ -4,6 +4,7 @@ import os
 import sys
 
 import deepspeed
+import fairscale.nn.model_parallel.initialize as mpu
 import hydra
 import torch
 import wandb
@@ -13,9 +14,10 @@ from torch import distributed as dist
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler)
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
-from transformers import (PreTrainedTokenizer)
+from transformers import PreTrainedTokenizer
 
 from data.mini_dataset import MiniDataset
+from general_util.dist_utils import get_pipeline_parallel_world_size, get_pipeline_parallel_rank, prepare_distributed_sampler
 from general_util.logger import setting_logger
 from general_util.training_utils import (
     batch_to_device,
@@ -23,9 +25,9 @@ from general_util.training_utils import (
     note_best_checkpoint,
     load_and_cache_examples,
     organize_multiple_dataset,
+    get_zero_stage,
 )
-import fairscale.nn.model_parallel.initialize as mpu
-from general_util.dist_utils import get_pipeline_parallel_world_size, get_pipeline_parallel_rank, prepare_distributed_sampler
+from lora_share_trainer.utils.utils import moving_average
 
 logger: logging.Logger
 
@@ -299,6 +301,11 @@ def main(cfg: DictConfig):
                         step += 1
                         rl_trainer.train()
                         outputs = rl_trainer.train_rl_step(exp_data)
+
+                        if cfg.enable_ema:
+                            moving_average(rl_engine.actor,
+                                           rl_engine.actor_ema,
+                                           zero_stage=get_zero_stage(cfg.actor_ds_config))
 
                         if cfg.local_rank in [-1, 0]:
                             tb_helper.update(last_batch=None, last_outputs=outputs)
