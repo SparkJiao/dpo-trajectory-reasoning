@@ -1,0 +1,71 @@
+defaults:
+  - hydra: default
+  - reader/logiqav2@read_tensor: react_service_0shot_v1_0
+  - post_process: openai_react
+#  - api/vllm/vllm_params@sampling_params: sampling_param_sample
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+#test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+
+save_best: False
+exp_name:
+exp_notes:
+#output_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.A100.w4.v7.9.1.s42/checkpoint-3600/
+#output_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w4.v1.0.th.s43/checkpoint-800/
+#output_dir: experiments/llama2.7b.chat.logiqav2.70b-distil.dpo.fix_hack.H100.w4.v1.0.th.s42/checkpoint-1200/
+output_dir: ../pretrained-models/MiniCPM-2B-dpo-bf16-llama-format
+eval_sub_path:
+
+#sampling_params:
+#  max_tokens: 3072
+#gpu_memory_utilization: 0.95
+
+read_tensor:
+  split_size: -1
+  split_id: 0
+  template_id: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "
+  service_based: True
+  service_processor:
+    _target_: data.vllm.VLLMRequestGenerator
+    api_url: http://0.0.0.0:6000/v1/completions
+    max_tokens: 1848
+    model: minicpm-2b-dpo
+    stop: [ "</s>", "\n\n\n\n", "Context:\n" ]
+#    n: 10
+    n: 1
+#    temperature: 1.0
+#    temperature: 2.0
+    temperature: 0.0
+  flush_file: ${flush_file}
+
+output_file: ${output_dir}/logiqav2.react.dev.0shot.sample${read_tensor.service_processor.n}.tem${read_tensor.service_processor.temperature}.v1.0.json
+flush_file: ${output_file}l
+
+# Dataloader
+num_workers: 8
+prefetch_factor:
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+fp16: True
+fp16_bfloat16: True
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

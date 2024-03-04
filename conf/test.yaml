@@ -146,8 +146,17 @@ summary_helper:
     max_kl: max_kl
     entropy: entropy
 
+# model parallel unit
+tensor_model_parallel_size: 2
+pipeline_model_parallel_size: 1
+ds_sequence_parallel_size: 1
+virtual_pipeline_model_parallel_size:
+pipeline_model_parallel_split_rank:
+use_distributed_optimizer: False
+
 
 # Placeholder
+rank:
 local_rank: -1
 world_size:
 train_batch_size:

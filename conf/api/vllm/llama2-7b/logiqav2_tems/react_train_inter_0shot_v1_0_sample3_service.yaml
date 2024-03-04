@@ -19,7 +19,10 @@ sample_num: 3
 split_size: 2
 split_id: 0
 
-output_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.no_action.sub_train.11348.sub_dev.348.sample${sample_num}.tem${read_tensor.service_processor.temperature}.${split_id}-of-${split_size}.json
+#output_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.sub_dev.1000.sample${sample_num}.tem${read_tensor.service_processor.temperature}.top${read_tensor.service_processor.top_p}.${split_id}-of-${split_size}.json
+#output_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.sub_train.11348.sub_dev.348.sample${sample_num}.tem${read_tensor.service_processor.temperature}.${split_id}-of-${split_size}.json
+#output_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.1.r0.5.re0.8.min_step_0.sub_dev.1000.sample${sample_num}.tem${read_tensor.service_processor.temperature}.top${read_tensor.service_processor.top_p}.${split_id}-of-${split_size}.json
+output_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.1.r0.5.re0.8.min_step_0.sub_train.11348.sub_dev.148.sample${sample_num}.tem${read_tensor.service_processor.temperature}.top${read_tensor.service_processor.top_p}.${split_id}-of-${split_size}.json
 flush_file: ${output_file}l
 
 # Data loading
@@ -28,7 +31,11 @@ read_tensor:
   read_func:
     _target_: data.logiqav2.SubResponseMergeReader
 #    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.no_action.sub_dev.1000.json
-    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.no_action.sub_train.11348.sub_dev.348.json
+#    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.no_action.sub_train.11348.sub_dev.348.json
+#    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.sub_dev.1000.json
+#    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.2.r0.5.min_step_0.sub_train.11348.sub_dev.348.json
+#    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.1.r0.5.re0.8.min_step_0.sub_dev.1000.json
+    inter_states_file: ${data_dir}/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.1.r0.5.re0.8.min_step_0.sub_train.11348.sub_dev.148.json
   template_id: 9
   instruction:
     _target_: data.prompts.logiqav2.react.prompts.get_prompt
@@ -45,8 +52,11 @@ read_tensor:
     max_tokens: 2048
     model: llama2-7b-logiqav2-step-dpo
     n: ${sample_num}
-    temperature: 1.0
-#    top_p: 0.8
+#    temperature: 1.0
+#    temperature: 2.0
+    temperature: 1.5
+#    temperature: 1.2
+    top_p: 0.8
     stop: [ "</s>", "\n\n\n\n" ]
   flush_file: ${flush_file}
 

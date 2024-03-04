@@ -113,3 +113,36 @@ class RewardModelOutput(ModelOutput):
 
 def return_single_device_map():
     return {"": "cuda:" + str(int(os.environ.get("LOCAL_RANK") or 0))}
+
+
+def reward_logit2prob(reduction_ids):
+    if isinstance(reduction_ids, omegaconf.ListConfig):
+        reduction_ids = list(reduction_ids)
+
+    def func(logits):
+        probs = torch.softmax(logits, dim=-1)
+        if len(logits.size()) == 3:
+            probs = probs[:, :, reduction_ids].sum(dim=-1)
+        elif len(logits.size()) == 2:
+            probs = probs[:, reduction_ids].sum(dim=-1)
+        else:
+            raise ValueError(f"Unsupported logits shape: {logits.size()}")
+        return probs
+
+    return func
+
+
+def reward_logit(reduction_ids):
+    if isinstance(reduction_ids, omegaconf.ListConfig):
+        reduction_ids = list(reduction_ids)
+
+    def func(logits):
+        if len(logits.size()) == 3:
+            logits = logits[:, :, reduction_ids].sum(dim=-1)
+        elif len(logits.size()) == 2:
+            logits = logits[:, reduction_ids].sum(dim=-1)
+        else:
+            raise ValueError(f"Unsupported logits shape: {logits.size()}")
+        return logits
+
+    return func

@@ -100,6 +100,7 @@ def main():
     parser.add_argument("--up_sampling", type=int, default=1)
     parser.add_argument("--min_pos_step", type=int, default=-1)
     parser.add_argument("--min_neg_step", type=int, default=-1)
+    parser.add_argument("--exclude_file", type=str, default=None)
     args = parser.parse_args()
 
     args.prob_labels = eval(args.prob_labels)
@@ -139,8 +140,17 @@ def main():
         else:
             raise ValueError(f"Unsupported reduction: {args.reduction}")
 
+    exclude_cnt = 0
+    exclude_ids = set()
+    if args.exclude_file is not None:
+        exclude_data = json.load(open(args.exclude_file, "r"))
+        for item in exclude_data:
+            exclude_ids.add(item["id"])
+            exclude_cnt += 1
+
     print("collected rewards", len(response2reward))
     print("duplicate responses", cnt)
+    print("exclude items", exclude_cnt)
 
     filtered = []
     pos2pos = []
@@ -161,6 +171,8 @@ def main():
                     "reject_reward": response2reward[reject],
                 })
             if args.min_pos_step > 0 and len(chosen.split("\n")) < args.min_pos_step:
+                continue
+            if item["id"] in exclude_ids:
                 continue
             for pos_id, pos_reward in pos_response_rewards:
                 if args.min_neg_step > 0 and len(item["response"][pos_id].split("\n")) < args.min_neg_step:

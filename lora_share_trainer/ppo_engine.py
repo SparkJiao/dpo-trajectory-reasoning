@@ -309,7 +309,7 @@ class DSChatPPOTrainer:
 
         return {"seq": out_seq}
 
-    def generate_experience(self, input_ids, attention_mask, global_step):
+    def generate_experience(self, input_ids, attention_mask, global_step, **kwargs):
         prompt_input_ids = input_ids
         mask = attention_mask
 
@@ -325,7 +325,7 @@ class DSChatPPOTrainer:
             output = fp8_func_wrap(self.actor_model, self.actor_fp8, self.fp8_recipe, seq, attention_mask)
             output_ref = fp8_func_wrap(self.ref_model, self.reference_fp8, self.fp8_recipe, seq, attention_mask)
             output_rm = fp8_func_wrap(self.reward_model, self.reward_fp8, self.fp8_recipe, seq, attention_mask)
-            reward_score = self.reward_post_fn(prompt_input_ids, seq, output_rm, self.tokenizer).detach()
+            reward_score = self.reward_post_fn(prompt_input_ids, seq, output_rm, self.tokenizer, **kwargs).detach()
             values = fp8_func_wrap(self.critic_model, self.critic_fp8, self.fp8_recipe, seq, attention_mask)["values"].detach()[:, :-1]
 
         logits = output.logits

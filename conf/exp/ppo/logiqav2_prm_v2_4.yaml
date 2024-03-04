@@ -1,0 +1,197 @@
+defaults:
+  - hydra: default
+  - reader/logiqav2@read_tensor: react_service_0shot_v1_0
+  - deepspeed@actor_ds_config: train_hybrid_engine_zero1
+  - deepspeed@critic_ds_config: train_hybrid_engine_zero1
+  - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
+dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
+
+dist_load_data_barrier: False
+model_name_or_path: experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w4.v1.0.th.s42/checkpoint-400/
+reward_model_path: experiments/llama2.7b.chat.logiqav2.70b-distil.prm.fix_hack.H100.w8.v1.0.iter1.s42/checkpoint-800/
+resume:
+
+tokenizer_init:
+  _target_: general_util.tokenization_utils.init_tokenizer
+  tokenizer_path: ${model_name_or_path}
+  padding_side: left
+
+torch_dtype:
+  _target_: general_util.training_utils.return_torch_dtype
+  dtype: bfloat16
+
+device_map:
+  _target_: models.llama.return_single_device_map
+
+actor_model:
+  _target_: models.llama_tp.LlamaForCausalLM.from_pretrained
+  pretrained_model_name_or_path: ${model_name_or_path}
+  gradient_checkpointing: True
+  pad_token_id: 0
+  attn_implementation: "flash_attention_2"
+  torch_dtype: ${torch_dtype}
+#  device_map: ${device_map}
+
+critic_model:
+  _target_: models.llama_tp.LlamaModelForSequenceClassificationForRL.from_pretrained
+  pretrained_model_name_or_path: ${reward_model_path}
+  gradient_checkpointing: True
+  pad_token_id: 0
+  attn_implementation: "flash_attention_2"
+  torch_dtype: ${torch_dtype}
+  #  device_map: ${device_map}
+  reduction_ids: [ 2, 3 ]
+  num_labels: 4
+
+rl_engine_init:
+  _target_: lora_share_trainer.ppo_engine.DeepSpeedChatPPOEngine
+  actor_model: ${actor_model}
+  ref_model: ${actor_model}
+  critic_model: ${critic_model}
+  reward_model: ${critic_model}
+  tokenizer: ${tokenizer_init}
+  actor_fp8: False
+  critic_fp8: False
+  reward_fp8: False
+  reference_fp8: False
+
+rl_trainer_init:
+  _target_: lora_share_trainer.ppo_engine.DSChatPPOTrainer
+  reward_post_fn:
+    _target_: lora_share_trainer.ppo_engine.react_process_reward
+    reduction: "none"
+  generation_config:
+    _target_: transformers.generation.configuration_utils.GenerationConfig
+    max_new_tokens: 2048
+    do_sample: True
+    num_return_sequences: 1
+    top_p: 0.8
+    temperature: 1.0
+    pad_token_id: 0
+    eos_token_id: 2
+
+kl_ctl: 0.01
+clip_reward_value: 5
+clip_range: 0.2
+clip_range_value: 0.2
+#gamma: 1.0
+gamma: 0.95  # Follow the parameter of ReFT.
+#lam: 0.95
+lam: 1.0
+generate_time: 1
+align_overflow: False
+enable_ema: True
+
+read_tensor:
+  template_id: "Context:\n{}\n\nQuestion:\n{}\n\nOptions:\n{}\n\nThought 1: "  # In version v2.1, we change the template to: ```xxx\n\nThought 1: ```
+  service_based: False
+  service_processor:
+
+collator:
+  _target_: data.logiqav2.TextPromptCollator
+  tokenizer: ${tokenizer_init}
+  max_seq_length: 2048
+
+num_workers: 16
+prefetch_factor: 2
+
+tp_size: 4
+dp_size:
+pp_size: 1
+
+
+exp_name: llama2.7b.chat.logiqav2.70b-distil.step.ppo.fix_hack.iter1.H100.tp4.dp2.v2.4.s${seed}
+exp_notes:
+output_dir: experiments/${exp_name}
+
+do_train: True
+evaluate_during_training: False
+
+learning_rate: 1e-6
+critic_learning_rate: 1e-6
+seed: 42
+fp16: True
+fp16_opt_level: O1
+fp16_bfloat16: True
+ddp_eval: True
+save_best: False
+save_ds_state: False
+save_steps: 50
+eval_steps: 500
+max_steps: -1
+warmup_steps:
+warmup_proportion: 0.1
+num_train_epochs: 1
+ppo_epochs: 2
+generation_batches: 1
+#generation_batches: 4
+total_dataset_len: -1
+logging_steps: 1
+
+print_answers: True
+prediction_cfg:
+  metric: "reward"
+  measure: 1
+  best_checkpoint:
+  best_result:
+
+# DeepSpeedRLLoraEngine
+per_gpu_train_batch_size: 2
+per_gpu_eval_batch_size: 2
+per_device_generation_batch_size: 4
+gradient_accumulation_steps: 32
+gradient_accumulation_steps_actor: ${gradient_accumulation_steps}
+weight_decay: 0.00
+actor_weight_decay: 0.00
+critic_weight_decay: 0.00
+
+actor_ds_config:
+  train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
+  gradient_accumulation_steps: ${gradient_accumulation_steps_actor}
+  optimizer:
+    type: AdamW
+    params:
+      lr: ${learning_rate}
+      betas: [ 0.9, 0.95 ]
+      weight_decay: ${actor_weight_decay}
+
+critic_ds_config:
+  train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
+  gradient_accumulation_steps: ${gradient_accumulation_steps}
+  optimizer:
+    type: AdamW
+    params:
+      lr: ${critic_learning_rate}
+      betas: [ 0.9, 0.95 ]
+      weight_decay: ${critic_weight_decay}
+
+ref_ds_config:
+rm_ds_config:
+
+#no_decay_name_list:
+#reward_model_init:
+
+summary_helper:
+  _target_: general_util.tensorboard_helper.WandbWriter
+  outputs_index_or_keys:
+    "actor_loss": actor_loss
+    "critic_loss": critic_loss
+    "return": return
+    "reward": reward
+
+
+# Placeholder
+local_rank: -1
+world_size:
+train_batch_size:
+eval_batch_size:
+no_cuda:
+device:
+n_gpu:

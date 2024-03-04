@@ -73,7 +73,7 @@ def get_type(line: str):
         raise ValueError(f"Unknown line: {line}")
 
 
-def sample_intermediate_responses(responses: List[str], ratio_s: float, ratio: float, remove_action: bool = False):
+def sample_intermediate_responses(responses: List[str], ratio_s: float, ratio: float, ratio_e: float, remove_action: bool = False):
     inter_states = []
     for resp_id, response in enumerate(responses):
         original_lines = response.split("\n")
@@ -81,7 +81,8 @@ def sample_intermediate_responses(responses: List[str], ratio_s: float, ratio: f
         steps = steps[:-1]  # Remove the `Final` action.
 
         start_step_id = int(len(steps) * ratio_s)
-        for i in range(start_step_id, len(steps)):
+        end_step_id = int(len(steps) * ratio_e)
+        for i in range(start_step_id, end_step_id):
             if random.random() < ratio:
                 inter_state = "\n".join(original_lines[:(steps[i][0] + 1)])
                 step_type = get_type(steps[i][1])
@@ -104,6 +105,7 @@ def main():
     parser.add_argument("--split_num", type=int, default=1)
     parser.add_argument("--ratio_s", type=float, default=0.2)
     parser.add_argument("--ratio", type=float, default=0.4)
+    parser.add_argument("--ratio_e", type=float, default=1.0)
     parser.add_argument("--min_step", type=int, default=8)
     parser.add_argument("--remove_action", action="store_true", default=False)
     args = parser.parse_args()
@@ -147,7 +149,8 @@ def main():
     o_cnt = 0
     total = 0
     for item in cleaned_data:
-        item["inter_states"] = sample_intermediate_responses(item["response"], ratio_s=args.ratio_s, ratio=args.ratio, remove_action=args.remove_action)
+        item["inter_states"] = sample_intermediate_responses(item["response"], ratio_s=args.ratio_s, ratio=args.ratio, ratio_e=args.ratio_e,
+                                                             remove_action=args.remove_action)
         for state in item["inter_states"]:
             line_type = state["type"]
             if line_type == "Thought":
