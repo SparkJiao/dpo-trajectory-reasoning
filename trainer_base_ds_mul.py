@@ -153,7 +153,7 @@ def train(cfg, model, tokenizer, continue_from_global_step=0):
     logger.info(optimizer.optimizer)
 
     unwrapped_model = model.module
-    assert isinstance(unwrapped_model, PreTrainedModel)
+    assert isinstance(unwrapped_model, PreTrainedModel), unwrapped_model.__class__.__name__
 
     # Train!
     logger.info("***** Running training *****")

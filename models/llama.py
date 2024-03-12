@@ -37,12 +37,15 @@ def return_single_device_map():
 
 class PreTrainedModelPeftMixin(PreTrainedModel):
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], *model_args, **kwargs):
+    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], *model_args, torch_compile_wrapper: Callable = None, **kwargs):
         gradient_checkpointing = kwargs.pop("gradient_checkpointing", False)
         model = super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
         if gradient_checkpointing:
             model.config.use_cache = False
             model.gradient_checkpointing_enable()
+        if torch_compile_wrapper:
+            # model = torch_compile_wrapper(model)
+            model.forward = torch_compile_wrapper(model.forward)
 
         return model
 

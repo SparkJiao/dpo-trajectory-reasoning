@@ -60,7 +60,7 @@ def merge_weights(state_dicts: list, merge_avg: bool = False):
                     merged_state_dict[k] += state_dicts[i][k]
                 merged_state_dict[k] /= len(state_dicts)
 
-    print(merged_state_dict.keys())
+    # print(merged_state_dict.keys())
     return merged_state_dict
 
 

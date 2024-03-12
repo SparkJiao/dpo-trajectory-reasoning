@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union, Callable
 
 import bitsandbytes as bnb
 import hydra.utils
@@ -144,5 +144,13 @@ def reward_logit(reduction_ids):
         else:
             raise ValueError(f"Unsupported logits shape: {logits.size()}")
         return logits
+
+    return func
+
+
+def torch_compile_wrap(**kwargs):
+    def func(model: Union[torch.nn.Module, Callable]):
+        return torch.compile(model,
+                             **kwargs)
 
     return func

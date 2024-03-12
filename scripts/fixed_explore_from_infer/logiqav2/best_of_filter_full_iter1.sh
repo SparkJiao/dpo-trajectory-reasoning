@@ -150,20 +150,39 @@ data_dir=experiments/llama2.7b.chat.logiqav2.70b-distil.step.dpo.fix_hack.H100.w
 
 # ============================= Exclude the training set for reward model
 
+#best_of=10
+#pos_margin=0.5
+#max_neg_num=10
+#index="(2,3)"
+#reduction="product"
+#up_sampling=1
+#rm_step=600
+#reward_file="experiments/llama2.7b.chat.logiqav2.70b-distil.prm.fix_hack.H100.w4.v1.3.iter1.s42/train.logiqav2.rewards.raw_trajectory.product.step-dpo-v1.0.v1.1/test-checkpoint-$rm_step/eval_predictions_rank0.json"
+#python scripts/best_of_filter_by_reward_v2.2.py \
+#  --input_file "$data_dir/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned.min_step_0.json" \
+#  --reward_file $reward_file \
+#  --output_file "$data_dir/logiqav2.train.react.v1.0.0shot.sample10.prm_hack_fix_v13_iter1_cp${rm_step}_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.$index.pair.${reduction}.up${up_sampling}.ex_rm_tr.json" \
+#  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels $index --reduction ${reduction} --up_sampling ${up_sampling} \
+#  --exclude_file "$data_dir/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.1.r0.5.re0.8.min_step_0.sub_dev.1000.json"
+#
+
+
+# ================================== Replay based reward model
+
 best_of=10
-pos_margin=0.5
+#pos_margin=0.8
+pos_margin=0.9
 max_neg_num=10
 index="(2,3)"
 reduction="product"
 up_sampling=1
 rm_step=600
-reward_file="experiments/llama2.7b.chat.logiqav2.70b-distil.prm.fix_hack.H100.w4.v1.3.iter1.s42/train.logiqav2.rewards.raw_trajectory.product.step-dpo-v1.0.v1.1/test-checkpoint-$rm_step/eval_predictions_rank0.json"
+reward_file="experiments/llama2.7b.chat.logiqav2.70b-distil.prm.fix_hack.H100.w4.v1.1.iter1.replay0.1.s42/train.logiqav2.rewards.raw_trajectory.product.step-dpo-v1.0.v1.1/test-checkpoint-${rm_step}/eval_predictions_rank0.json"
 python scripts/best_of_filter_by_reward_v2.2.py \
   --input_file "$data_dir/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned.min_step_0.json" \
   --reward_file $reward_file \
-  --output_file "$data_dir/logiqav2.train.react.v1.0.0shot.sample10.prm_hack_fix_v13_iter1_cp${rm_step}_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.$index.pair.${reduction}.up${up_sampling}.ex_rm_tr.json" \
-  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels $index --reduction ${reduction} --up_sampling ${up_sampling} \
-  --exclude_file "$data_dir/logiqav2.react.train.0shot.sample10.tem1.0.v1.0.cleaned_inter_ver2.3.rs0.1.r0.5.re0.8.min_step_0.sub_dev.1000.json"
+  --output_file "$data_dir/logiqav2.train.react.v1.0.0shot.sample10.prm_replay_v11_iter1_cp${rm_step}_best_of_${best_of}.neg${max_neg_num}.pos${pos_margin}.v2.2.$index.pair.${reduction}.up${up_sampling}.full_only.json" \
+  --best_of $best_of --max_neg_num $max_neg_num --pos_margin $pos_margin --prob_labels $index --reduction ${reduction} --up_sampling ${up_sampling}
 
 
 # =============================== Debug

@@ -48,6 +48,9 @@ model:
   attn_implementation: "flash_attention_2"
   torch_dtype: ${torch_dtype}
   device_map: ${device_map}
+#  torch_compile_wrapper:  # Does not support bf16
+#    _target_: models.utils.torch_compile_wrap
+#    mode: "default"
 
 # Data loading
 rc_read_tensor_train:
@@ -163,12 +166,12 @@ do_eval: False
 eval_sub_path: checkpoint-*
 
 # Training hyper-parameters
-per_gpu_train_batch_size: 2
-per_gpu_eval_batch_size: 2
+per_gpu_train_batch_size: 4
+per_gpu_eval_batch_size: 16
 #learning_rate: 1e-4
 #learning_rate: 5e-6
 learning_rate: 1e-6
-gradient_accumulation_steps: 8
+gradient_accumulation_steps: 4
 weight_decay: 0.01
 adam_epsilon: 1e-6
 adam_betas: "(0.9, 0.98)"
