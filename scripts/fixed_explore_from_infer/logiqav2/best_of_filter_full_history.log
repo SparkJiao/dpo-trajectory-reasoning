@@ -1,0 +1,264 @@
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+usage: best_of_filter_by_reward_v2.2.py [-h] [--input_file INPUT_FILE] [--reward_file REWARD_FILE] [--output_file OUTPUT_FILE] [--best_of BEST_OF] [--max_neg_num MAX_NEG_NUM] [--pos_margin POS_MARGIN] [--reduction {product,min}] [--prob_labels PROB_LABELS] [--up_sampling UP_SAMPLING] [--min_pos_step MIN_POS_STEP]
+                                        [--min_neg_step MIN_NEG_STEP] [--exclude_file EXCLUDE_FILE]
+best_of_filter_by_reward_v2.2.py: error: argument --reduction: invalid choice: 'sum' (choose from 'product', 'min')
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ cd rl-hybrid-engine/
+-bash: cd: rl-hybrid-engine/: No such file or directory
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 198827
+Reduced 9349
+Positive pairs by up-sampling: 198827
+Candidates: 12560
+Collected amount of samples with rewards 332206
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos1.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 179873
+Reduced 9349
+Positive pairs by up-sampling: 179873
+Candidates: 12560
+Collected amount of samples with rewards 313252
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos2.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 164573
+Reduced 9349
+Positive pairs by up-sampling: 164573
+Candidates: 12560
+Collected amount of samples with rewards 297952
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos3.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 151516
+Reduced 9349
+Positive pairs by up-sampling: 151516
+Candidates: 12560
+Collected amount of samples with rewards 284895
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos4.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 139848
+Reduced 9349
+Positive pairs by up-sampling: 139848
+Candidates: 12560
+Collected amount of samples with rewards 273227
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos5.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 129491
+Reduced 9349
+Positive pairs by up-sampling: 129491
+Candidates: 12560
+Collected amount of samples with rewards 262870
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos6.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 97288
+Reduced 9349
+Positive pairs by up-sampling: 97288
+Candidates: 12560
+Collected amount of samples with rewards 230667
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos10.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 97288
+Reduced 9349
+Positive pairs by up-sampling: 97288
+Candidates: 12560
+Collected amount of samples with rewards 230667
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg20.pos10.0.v2.2.raw[].pair.sum.up1.full_only.json
+^[[A(py3.9) fangkai@scsehg:~/rl-hybrid-engi
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 50938
+Reduced 9349
+Positive pairs by up-sampling: 50938
+Candidates: 12560
+Collected amount of samples with rewards 184317
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos20.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 38075
+Reduced 9349
+Positive pairs by up-sampling: 38075
+Candidates: 12560
+Collected amount of samples with rewards 171454
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos25.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 28829
+Reduced 9349
+Positive pairs by up-sampling: 28829
+Candidates: 12560
+Collected amount of samples with rewards 162208
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos30.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 28829
+Reduced 9349
+Positive pairs by up-sampling: 28829
+Candidates: 12560
+Collected amount of samples with rewards 162208
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos30.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 22044
+Reduced 9349
+Positive pairs by up-sampling: 22044
+Candidates: 12560
+Collected amount of samples with rewards 155423
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos35.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+[]
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 16916
+Reduced 9349
+Positive pairs by up-sampling: 16916
+Candidates: 12560
+Collected amount of samples with rewards 150295
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos40.0.v2.2.raw[].pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+usage: best_of_filter_by_reward_v2.2.py [-h] [--input_file INPUT_FILE] [--reward_file REWARD_FILE] [--output_file OUTPUT_FILE] [--best_of BEST_OF] [--max_neg_num MAX_NEG_NUM] [--pos_margin POS_MARGIN] [--reduction {product,min,sum}] [--prob_labels PROB_LABELS] [--up_sampling UP_SAMPLING] [--min_pos_step MIN_POS_STEP]
+                                        [--min_neg_step MIN_NEG_STEP] [--exclude_file EXCLUDE_FILE]
+best_of_filter_by_reward_v2.2.py: error: argument --max_neg_num: expected one argument
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+(2, 3)
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 159390
+Reduced 9349
+Positive pairs by up-sampling: 159390
+Candidates: 12560
+Collected amount of samples with rewards 292769
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos0.5.v2.2.(2,3).pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+(2, 3)
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 150800
+Reduced 9349
+Positive pairs by up-sampling: 150800
+Candidates: 12560
+Collected amount of samples with rewards 284179
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos0.7.v2.2.(2,3).pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+(2, 3)
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 106232
+Reduced 9349
+Positive pairs by up-sampling: 106232
+Candidates: 12560
+Collected amount of samples with rewards 239611
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos2.0.v2.2.(2,3).pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+(2, 3)
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 79362
+Reduced 9349
+Positive pairs by up-sampling: 79362
+Candidates: 12560
+Collected amount of samples with rewards 212741
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos3.0.v2.2.(2,3).pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+(2, 3)
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 59526
+Reduced 9349
+Positive pairs by up-sampling: 59526
+Candidates: 12560
+Collected amount of samples with rewards 192905
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos4.0.v2.2.(2,3).pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+(2, 3)
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 35321
+Reduced 9349
+Positive pairs by up-sampling: 35321
+Candidates: 12560
+Collected amount of samples with rewards 168700
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos6.0.v2.2.(2,3).pair.sum.up1.full_only.json
+(py3.9) fangkai@scsehg:~/rl-hybrid-engine$ bash scripts/fixed_explore_from_infer/logiqav2/best_of_filter_full.sh
+(2, 3)
+sum
+collected rewards 108096
+duplicate responses 15276
+exclude items 0
+Positive pairs 13160
+Reduced 9349
+Positive pairs by up-sampling: 13160
+Candidates: 12560
+Collected amount of samples with rewards 146539
+Save to experiments/llama2.7b.chat.logiqav2.llama-2-70b-chat.dpo-sft.A6K.w4.v1.0/checkpoint-1600/react-inter-states/../fix_hack_data_dir/logiqav2-train.react.v1.0.0shot.sample10.clean_inter_ver2.0.rs0.2.r0.3.prm_hack_fix_v10_cp800_best_of_10.neg10.pos10.0.v2.2.(2,3).pair.sum.up1.full_only.json

@@ -78,16 +78,10 @@ def best_of_n_filter_inter_states(item, best_of: int, response2reward: Dict[str,
     return chosen_responses, reject_responses
 
 
-# def logit2prob(logits):
-#     probs = torch.softmax(logits, dim=-1)
-#     return probs[:, 3]
 def logit2prob(logits, prob_labels=(3,)):
-    if prob_labels:
-        probs = torch.softmax(logits, dim=-1)
-        # Sum the probabilities along the `prob_labels`.
-        return probs[:, prob_labels].sum(dim=-1)
-
-    return logits[:, 3]
+    probs = torch.softmax(logits, dim=-1)
+    # Sum the probabilities along the `prob_labels`.
+    return probs[:, prob_labels].sum(dim=-1)
 
 
 def main():
@@ -96,13 +90,13 @@ def main():
     parser.add_argument("--reward_file", type=str)
     parser.add_argument("--output_file", type=str)
     parser.add_argument("--best_of", type=int, default=1)
-    parser.add_argument("--max_neg_num", type=int, default=100)
-    parser.add_argument("--pos_margin", type=float, default=2.0)
-    parser.add_argument("--reduction", type=str, default="product", choices=["product", "min", "sum"])
+    # parser.add_argument("--max_neg_num", type=int, default=100)
+    # parser.add_argument("--pos_margin", type=float, default=2.0)
+    parser.add_argument("--reduction", type=str, default="product", choices=["product", "min"])
     parser.add_argument("--prob_labels", type=str, default="(3,)", help="The labels to compute the probability.")
-    parser.add_argument("--up_sampling", type=int, default=1)
-    parser.add_argument("--min_pos_step", type=int, default=-1)
-    parser.add_argument("--min_neg_step", type=int, default=-1)
+    # parser.add_argument("--up_sampling", type=int, default=1)
+    # parser.add_argument("--min_pos_step", type=int, default=-1)
+    # parser.add_argument("--min_neg_step", type=int, default=-1)
     parser.add_argument("--exclude_file", type=str, default=None)
     args = parser.parse_args()
 
@@ -155,57 +149,53 @@ def main():
     print("duplicate responses", cnt)
     print("exclude items", exclude_cnt)
 
-    filtered = []
-    pos2pos = []
+    outputs = []
     reduced = 0
     pos_pair = 0
     for item in data:
         chosen_responses, pos_response_rewards, reject_responses, correct_num = best_of_n_filter(item, args.best_of, response2reward)
         for chosen in chosen_responses:
-            for reject in reject_responses[:args.max_neg_num]:
-                filtered.append({
-                    "chosen": chosen,
-                    "reject": reject,
-                    "id": item["id"],
-                    "is_full": True,
-                    "chosen_full_rewards": response2full_rewards[chosen],
-                    "reject_full_rewards": response2full_rewards[reject],
-                    "chosen_reward": response2reward[chosen],
-                    "reject_reward": response2reward[reject],
-                })
-            if args.min_pos_step > 0 and len(chosen.split("\n")) < args.min_pos_step:
-                continue
-            if item["id"] in exclude_ids:
-                continue
-            for pos_id, pos_reward in pos_response_rewards:
-                if args.min_neg_step > 0 and len(item["response"][pos_id].split("\n")) < args.min_neg_step:
-                    continue
-                if response2reward[chosen] - pos_reward > args.pos_margin:
-                    pos2pos.append({
-                        "chosen": chosen,
-                        "reject": item["response"][pos_id],
-                        "id": item["id"],
-                        "is_full": True,
-                        "chosen_full_rewards": response2full_rewards[chosen],
-                        "reject_full_rewards": response2full_rewards[item["response"][pos_id]],
-                        "chosen_reward": response2reward[chosen],
-                        "reject_reward": response2reward[item["response"][pos_id]],
-                    })
-                    pos_pair += 1
-        if correct_num < args.best_of:
-            reduced += 1
+            outputs.append({
+                "chosen": chosen,
+                "id": item["id"],
+                "is_full": True,
+                "chosen_full_rewards": response2full_rewards[chosen],
+                "chosen_reward": response2reward[chosen],
+            })
+            # for reject in reject_responses[:args.max_neg_num]:
+            #     filtered.append({
+            #         "chosen": chosen,
+            #         "reject": reject,
+            #         "id": item["id"],
+            #         "is_full": True,
+            #         "chosen_full_rewards": response2full_rewards[chosen],
+            #         "reject_full_rewards": response2full_rewards[reject],
+            #         "chosen_reward": response2reward[chosen],
+            #         "reject_reward": response2reward[reject],
+            #     })
+            # if args.min_pos_step > 0 and len(chosen.split("\n")) < args.min_pos_step:
+            #     continue
+            # if item["id"] in exclude_ids:
+            #     continue
+            # for pos_id, pos_reward in pos_response_rewards:
+            #     if args.min_neg_step > 0 and len(item["response"][pos_id].split("\n")) < args.min_neg_step:
+            #         continue
+            #     if response2reward[chosen] - pos_reward > args.pos_margin:
+            #         pos2pos.append({
+            #             "chosen": chosen,
+            #             "reject": item["response"][pos_id],
+            #             "id": item["id"],
+            #             "is_full": True,
+            #             "chosen_full_rewards": response2full_rewards[chosen],
+            #             "reject_full_rewards": response2full_rewards[item["response"][pos_id]],
+            #             "chosen_reward": response2reward[chosen],
+            #             "reject_reward": response2reward[item["response"][pos_id]],
+            #         })
+            #         pos_pair += 1
 
-    print("Positive pairs", len(pos2pos))
-    pos2pos = pos2pos * args.up_sampling
-    filtered += pos2pos
-
-    print("Reduced", reduced)
-    # print("Positive pairs", pos_pair)
-    print("Positive pairs by up-sampling:", len(pos2pos))
-    print(f"Candidates: {len(data)}")
-    print("Collected amount of samples with rewards", len(filtered))
+    print("Collected amount of samples with rewards", len(outputs))
     print(f"Save to {args.output_file}")
-    json.dump(filtered, open(args.output_file, "w"), indent=4)
+    json.dump(outputs, open(args.output_file, "w"), indent=4)
 
 
 if __name__ == '__main__':

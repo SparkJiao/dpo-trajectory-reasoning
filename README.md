@@ -76,10 +76,10 @@ The trajectory data used for vanilla DPO training can be found in the correspond
 
 #### Configs
 
-| Dataset   | Config                                                            | Devices  |                                              Weights & Trajectory Data                                               |
-|-----------|-------------------------------------------------------------------|:--------:|:--------------------------------------------------------------------------------------------------------------------:|
-| ReClor    | `conf/exp/dpo/reclor/llama2_7b_gpt351106_distil_dpo_v3_0.yaml`    | 4 x H100 |   [Huggingface Hub](https://huggingface.co/chitanda/llama2.7b.chat.reclor.gpt351106.dpo.fix_hack.H100.w4.v3.0.s42)   |
-| LogiQA-v2 | `conf/exp/dpo/logiqav2/llama2_7b_70bdistil_dpo_v1_0_th_test.yaml` | 4 x H100 | [Huggingface Hub](https://huggingface.co/chitanda/lama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.H100.w4.v5.0.s42) |
+| Dataset   | Config                                                            | Devices  |                                               Weights & Trajectory Data                                               |
+|-----------|-------------------------------------------------------------------|:--------:|:---------------------------------------------------------------------------------------------------------------------:|
+| ReClor    | `conf/exp/dpo/reclor/llama2_7b_gpt351106_distil_dpo_v3_0.yaml`    | 4 x H100 |   [Huggingface Hub](https://huggingface.co/chitanda/llama2.7b.chat.reclor.gpt351106.dpo.fix_hack.H100.w4.v3.0.s42)    |
+| LogiQA-v2 | `conf/exp/dpo/logiqav2/llama2_7b_70bdistil_dpo_v1_0_th_test.yaml` | 4 x H100 | [Huggingface Hub](https://huggingface.co/chitanda/llama2.7b.chat.reclor.gpt351106.step.dpo.fix_hack.H100.w4.v5.0.s42) |
 
 ### Reward Modeling
 

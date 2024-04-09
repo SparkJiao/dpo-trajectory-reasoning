@@ -12,16 +12,17 @@ hydra:
 
 train_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/train.txt
 dev_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
-test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/dev.txt
+test_file: ../research.data/LogiQA2.0/logiqa/DATA/LOGIQA/test.txt
 
 #num_shot: 5
 
-output_file: api-outputs/gpt-4-1106-preview/logiqav2.dev.react.1shot.gpt4-1106-preview.sample1.tem${model.temperature}.first500.json
+output_file: api-outputs/gpt-4-1106-preview/logiqav2.dev.react.1shot.gpt4-1106-preview.sample1.tem${model.temperature}.first${read_tensor.max_data_num}.json
 flush_file: ${output_file}l
 
 model:
   _target_: data.openai_api_caller.GPTTurbo
-  model: "gpt-4-1106-preview"
+#  model: "gpt-4-1106-preview"
+  model: "gpt-4-0125-preview"
   max_tokens: 2048
 #  temperature: 1.0
 #  temperature: 0.7
@@ -32,7 +33,8 @@ model:
 
 # Data loading
 read_tensor:
-  max_data_num: 500
+#  max_data_num: 500
+  max_data_num: 250
   service_based: False
   service_processor:
   api_based: True
