@@ -1,0 +1,95 @@
+defaults:
+  - hydra: default
+  - post_process: math
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+prev_split_size: 16
+prev_split_id: 0
+train_file:
+dev_file:
+test_file: ${output_dir}/meta_math.cot.train.0shot.n5.tem0.7.p0.8.v1.0.${prev_split_id}-of-${prev_split_size}_clean_accumulated.json
+
+save_best: False
+exp_name:
+exp_notes:
+output_dir: experiments/gemma.2b.it.meta_math.H100.w4.v1.4/checkpoint-3200
+eval_sub_path:
+
+
+split_size: 16
+split_id: 0
+port: 6000
+sample_n: 3
+temperature: 0.7
+top_p: 0.8
+
+sampling_params:
+  _target_: vllm.SamplingParams
+  n: ${sample_n}
+  temperature: ${temperature}
+  max_tokens: 1024
+  stop: [ "<eos>", "\n\n\n\n", "### Instruction" ]
+  top_p: ${top_p}
+
+
+read_tensor:
+  _target_: data.logic_combine.ResponseAlignDataset
+  aligner:
+    _target_: data.input_aligner.concat_aligner
+    aligners:
+      - _target_: data.math.meta_math_gold_answer_extractor
+        response_field: "response"
+      - _target_: data.input_aligner.accumulate_step_aligner
+        step_field: accumulated_response
+        index_field: "id"
+  template: "### Instruction:\n{query}\n\n### Response: Let's think step by step. {accumulated_response}"
+  instruction: "Below is an instruction that describes a task. Write a response that appropriately completes the request."
+  split_size: ${split_size}
+  split_id: ${split_id}
+#  service_based: True
+#  service_processor:
+#    _target_: data.vllm.VLLMRequestGenerator
+#    api_url: http://0.0.0.0:${port}/v1/completions
+#    max_tokens: 1024
+#    model: gemma-2b-meta-math-cot-sft
+#    stop: [ "<eos>", "\n\n\n\n", "### Instruction" ]
+#    n: ${sample_n}
+#    temperature: ${temperature}
+#    top_p: ${top_p}
+  flush_file: ${flush_file}
+
+
+suffix: n${sample_n}.tem${temperature}.p${top_p}.v1.0.${split_id}-of-${split_size}
+output_file: ${output_dir}/meta_math.cot.train.0shot.n5.tem0.7.p0.8.v1.0.${prev_split_id}-of-${prev_split_size}_clean_acc.completion.${suffix}.json
+flush_file: ${output_file}l
+
+post_process:
+  resume: True
+  index_field: "id"
+  label_field: "label"
+
+# Dataloader
+num_workers: 8
+prefetch_factor:
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+fp16: True
+fp16_bfloat16: True
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

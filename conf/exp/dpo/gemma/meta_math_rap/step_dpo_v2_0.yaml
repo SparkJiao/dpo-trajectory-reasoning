@@ -1,0 +1,197 @@
+defaults:
+  - hydra: default
+  - deepspeed@ds_cfg: train_hybrid_engine_zero1
+  - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
+
+hydra:
+  searchpath:
+    - file://conf/
+
+sft_model_dir: experiments/gemma.2b.it.meta_math_distil.H100.w4.v1.0/checkpoint-2000/
+train_file: ${sft_model_dir}/meta_math_sub.25k.rap.train.0shot.n20.tem1.0.p0.8.v1.0_clean.prm_cp3200_best_of_10.v1.0.(2,3).pos0.5.neg10.product.full_only_pos2pos.json
+dev_file:
+test_file:
+
+torch_dtype:
+  _target_: general_util.training_utils.return_torch_dtype
+  dtype: bfloat16
+
+tokenizer_init:
+  _target_: general_util.tokenization_utils.init_tokenizer
+  tokenizer_path: ${model_name_or_path}
+  padding_side: left
+
+device_map:
+  _target_: models.utils.return_single_device_map
+
+model:
+  _target_: models.gemma.GemmaForCausalLMDPO.from_pretrained_with_ref_model
+  beta: 0.5
+  gradient_checkpointing: False
+#  gradient_checkpointing: True
+  attn_implementation: "flash_attention_2"
+  torch_dtype: ${torch_dtype}
+  device_map: ${device_map}
+  ref_model:
+    _target_: models.gemma.GemmaForCausalLM.from_pretrained
+    pretrained_model_name_or_path: ${model_name_or_path}
+    torch_dtype: ${torch_dtype}
+    attn_implementation: "flash_attention_2"
+    device_map: ${device_map}
+
+
+# Data loading
+read_tensor_dpo:
+  _target_: data.logic_combine.MultiMappingDataset
+  file_path: ${sft_model_dir}/meta_math_sub.25k.rap.train.0shot.n10.tem1.0.p0.7.v1.0_clean_fix.json
+  aligner:
+    _target_: data.input_aligner.concat_aligner
+    aligners:
+      - _target_: data.input_aligner.dpo_pair_aligner_cleaned
+        response_field: "response"
+        id_field: "id"
+        do_sample: False
+  template:
+    chosen: "{instruction}\n\n### Question: {query}\n\nSubQuestion 1: {pos}<eos>"
+    reject: "{instruction}\n\n### Question: {query}\n\nSubQuestion 1: {neg}<eos>"
+    prompt: "{instruction}\n\n### Question: {query}\n\nSubQuestion 1:"
+  instruction: "Given a question, please decompose it into sub-questions. For each sub-question, please answer it in a complete sentence, ending with \"The answer is\". When the original question is answerable, please start the sub-question with \"Now we can answer the question: \"."
+  kv_mapping:
+    chosen: chosen
+    reject: reject
+    id: index
+    prompt: prompt
+
+read_tensor_step_dpo:
+  _target_: data.logic_combine.MultiMappingDataset
+  aligner:
+    _target_: data.logic_combine.field_extract_aligner
+    input_index_field: id
+    extract_index_field: id
+    extract_fields:
+      - query
+    extra_file: ${sft_model_dir}/meta_math_sub.25k.rap.train.0shot.n10.tem1.0.p0.7.v1.0_clean_fix.json
+  template:
+    chosen: "{instruction}\n\n### Question: {query}\n\nSubQuestion 1: {chosen}<eos>"
+    reject: "{instruction}\n\n### Question: {query}\n\nSubQuestion 1: {reject}<eos>"
+    prompt: "{instruction}\n\n### Question: {query}\n\nSubQuestion 1:"
+  instruction: "Given a question, please decompose it into sub-questions. For each sub-question, please answer it in a complete sentence, ending with \"The answer is\". When the original question is answerable, please start the sub-question with \"Now we can answer the question: \"."
+  kv_mapping:
+    chosen: chosen
+    reject: reject
+    id: index
+    prompt: prompt
+
+read_tensor:
+  _target_: data.general.ReplayDataset
+  _recursive_: False
+  new_dataset_cfg: ${read_tensor_step_dpo}
+  old_dataset_cfg: ${read_tensor_dpo}
+  replay_ratio: 0.2
+
+
+dist_load_data_barrier: False
+
+extended_vocab:
+
+# Data collator
+collator:
+  _target_: data.dpo.DPOCollator
+  tokenizer: ${tokenizer_init}
+  max_seq_length: 1024
+
+# Dataloader
+num_workers: 8
+prefetch_factor: 2
+
+# Wiki path pretrain v8.2
+model_name_or_path: ${sft_model_dir}
+pretrain:
+
+dp_size:
+tp_size: 1
+pp_size: 1
+
+
+exp_name: gemma.2b.it.meta_math_rap.step.dpo.H100.w4.v2.0.s${seed}
+#exp_name: gemma.2b.it.meta_math_rap.step.dpo.A100-40.w4.v1.0.s${seed}
+exp_notes:
+output_dir: experiments/${exp_name}
+
+
+do_train: True
+evaluate_during_training: False
+
+do_eval: False
+eval_sub_path: checkpoint-100
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 2  # H100
+per_gpu_eval_batch_size: 4
+learning_rate: 1e-6
+gradient_accumulation_steps: 8
+weight_decay: 0.1
+adam_epsilon: 1e-6
+adam_betas: "(0.9, 0.98)"
+total_dataset_len: -1
+max_grad_norm: 1.0
+num_train_epochs: 1
+max_steps: 1200
+warmup_proportion: 0.06
+warmup_steps: 0
+
+# Optimizer
+optimizer:
+use_nvlamb:
+bit_training:
+
+logging_steps: 5
+save_ds_state: False
+save_steps: 100
+save_best: False
+eval_steps: 400
+ddp_eval: True
+no_cuda: False
+seed: 42
+local_rank: -1
+fp16: True
+fp16_opt_level: O1
+fp16_bfloat16: True
+
+# Prediction config
+prediction_cfg:
+  metric: "loss"
+  measure: -1
+  best_checkpoint:
+  best_result:
+eval_forward_fn:
+  _target_: general_util.evaluator.DefaultForwardFn
+post_process:
+  _target_: post_processors.dpo.DPOEvalPostProcessor
+
+ds_cfg:
+  train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
+  gradient_accumulation_steps: ${gradient_accumulation_steps}
+  optimizer:
+    type: AdamW
+    params:
+      lr: ${learning_rate}
+      betas: [ 0.9, 0.95 ]
+      weight_decay: ${weight_decay}
+
+
+
+summary_helper:
+  _target_: general_util.tensorboard_helper.WandbWriter
+  batch_index_or_keys:
+  #    "train/pair_value_num": pair_value_num
+  outputs_index_or_keys:
+    "train/chosen_reward": chosen_reward
+    "train/rejected_reward": rejected_reward
+
+# Temporary variables
+n_gpu:
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

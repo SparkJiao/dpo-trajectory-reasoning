@@ -87,10 +87,12 @@ class DPOMergeDataset(ComposeDatasetMixin):
                  reader=DPOPairReader(),
                  instruction: str = "", few_shot_prompts: str = "",
                  compose_keys: Union[List, Tuple, ListConfig] = ("context", "question", "options"),
-                 format_filter: Optional[Callable] = None):
+                 format_filter: Optional[Callable] = None,
+                 index_field: str = "index"):
         super().__init__(template, instruction, few_shot_prompts, compose_keys)
 
         self.tokenizer = tokenizer
+        self.index_field = index_field
 
         dpo_data = reader(file_path)
         self.id2dpo_item = collections.defaultdict(list)
@@ -101,8 +103,8 @@ class DPOMergeDataset(ComposeDatasetMixin):
         data = []
         abandoned = []
         for i, item in enumerate(original_data):
-            if "index" in item:
-                item_id = item["index"]
+            if self.index_field in item:
+                item_id = item[self.index_field]
             else:
                 item_id = i
             if item_id in self.id2dpo_item:

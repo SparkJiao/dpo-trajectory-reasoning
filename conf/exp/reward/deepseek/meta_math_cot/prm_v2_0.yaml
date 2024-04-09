@@ -1,0 +1,168 @@
+defaults:
+  - hydra: default
+  - deepspeed@ds_cfg: train_hybrid_engine_zero1
+  #  - deepspeed@ds_cfg: train_hybrid_engine_zero2
+  - _self_  # see here for more details: https://hydra.cc/docs/tutorials/basic/your_first_app/defaults/#composition-order-of-primary-config
+
+hydra:
+  searchpath:
+    - file://conf/
+
+
+train_file: ${sft_dir}/meta_math_sub_math.55k.cot.train.0shot.n5.tem0.8.p0.9.v1.0_dsk_clean_v2_accumulated_off1.sub_dev.6000.sub_train.5700.json
+dev_file: ${sft_dir}/meta_math_sub_math.55k.cot.train.0shot.n5.tem0.8.p0.9.v1.0_dsk_clean_v2_accumulated_off1.sub_dev.6000.sub_dev.300.json
+test_file:
+
+sft_dir: /export/home2/fangkai/pretrained-models/deepseek-ai/deepseek-math-7b-instruct
+
+torch_dtype:
+  _target_: general_util.training_utils.return_torch_dtype
+  dtype: bfloat16
+
+tokenizer_init:
+  _target_: general_util.tokenization_utils.init_tokenizer
+  tokenizer_path: ${model_name_or_path}
+  padding_side: left
+
+model:
+  _target_: models.llama.LlamaModelForSequenceClassification.from_pretrained
+  gradient_checkpointing: True
+  attn_implementation: "flash_attention_2"
+  num_labels: 4
+  torch_dtype: ${torch_dtype}
+  device_map:
+    _target_: models.utils.return_single_device_map
+
+
+read_tensor:
+  _target_: data.logic_combine.PromptResponseDataset
+  prompt_template: "User: {query}\nPlease reason step by step, and put your final answer within {instruction}.\n\nAssistant:"
+  response_template: "{accumulated_response}"
+  aligner:
+    _target_: data.input_aligner.concat_aligner
+    aligners:
+      - _target_: data.input_aligner.accumulate_step_aligner
+        step_field: accumulated_response
+        index_field: "id"
+        step_offset: 0
+      - _target_: data.input_aligner.deepseek_completion_count_aligner
+        completion_file: ${sft_dir}/meta_math_sub_math.55k.cot.train.0shot.n5.tem0.8.p0.9.v1.0_dsk_clean_v2_off1_acc.sub_dev.6000.completion.n3.tem1.0.p0.9.v1.0.json
+        index_field: "id"
+        value_field: "value"
+        eval_fn: "gsm8k"
+  instruction: "\\boxed{}"
+  index_field: "id"
+  kv_mapping:
+    prompt: prompt
+    text: input
+    id: index
+    value: value
+    accumulated_response: response
+
+
+dist_load_data_barrier: False
+
+extended_vocab:
+
+# Data collator
+collator:
+  _target_: data.general.Attempt2ValueCollator
+  tokenizer: ${tokenizer_init}
+  max_seq_length: 2048
+
+# Dataloader
+num_workers: 8
+prefetch_factor: 2
+
+# Wiki path pretrain v8.2
+model_name_or_path: ${sft_dir}
+pretrain:
+resume:
+
+dp_size:
+tp_size: 1
+pp_size: 1
+
+exp_name: deepseek-math.7b.ins.meta_math_cot.prm.H100.w4.v2.0  # Remember that there should be some samples containing more than 1 predicted answers.
+exp_notes:
+output_dir: experiments/${exp_name}  # Fix <pad token id>
+
+
+do_train: True
+evaluate_during_training: True
+
+do_eval: True
+eval_sub_path: checkpoint-*
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 8
+per_gpu_eval_batch_size: 16
+#learning_rate: 1e-4
+#learning_rate: 5e-6
+learning_rate: 2e-6
+gradient_accumulation_steps: 8
+weight_decay: 0.1
+adam_epsilon: 1e-6
+adam_betas: "(0.9, 0.98)"
+#adam_betas: "(0.9, 0.999)"
+#max_grad_norm: 0.0
+total_dataset_len: -1
+max_grad_norm: 1.0
+num_train_epochs: 1
+max_steps: 0
+warmup_proportion: 0.1
+warmup_steps: 0
+
+# Optimizer
+optimizer:
+use_nvlamb:
+bit_training:
+
+logging_steps: 5
+save_ds_state: False
+save_steps: 200
+save_best: False
+eval_steps: 200
+ddp_eval: True
+no_cuda: False
+seed: 42
+local_rank: -1
+fp16: True
+fp16_opt_level: O1
+fp16_bfloat16: True
+
+# Prediction config
+prediction_cfg:
+  metric: "acc"
+  measure: 1
+  best_checkpoint:
+  best_result:
+eval_forward_fn:
+  _target_: general_util.evaluator.DefaultForwardFn
+post_process:
+  _target_: post_processors.dpo.ResponseClsPostProcessor
+
+
+ds_cfg:
+  train_micro_batch_size_per_gpu: ${per_gpu_train_batch_size}
+  gradient_accumulation_steps: ${gradient_accumulation_steps}
+  optimizer:
+    type: AdamW
+    params:
+      lr: ${learning_rate}
+      betas: [ 0.9, 0.95 ]
+      weight_decay: ${weight_decay}
+
+
+
+summary_helper:
+  _target_: general_util.tensorboard_helper.WandbWriter
+  batch_index_or_keys:
+  outputs_index_or_keys:
+
+# Temporary variables
+n_gpu:
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

@@ -1,0 +1,99 @@
+defaults:
+  - hydra: default
+#  - post_process: math
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file:
+dev_file:
+#test_file: ../research.data/MetaMathQA/MetaMathQA-25K-sample.json
+test_file: ../research.data/MetaMathQA/MetaMath-math-55k.json
+#test_file: ../research.data/MetaMathQA/MetaMath-math-100k.json
+
+save_best: False
+exp_name:
+exp_notes:
+output_dir: ../pretrained-models/deepseek-ai/deepseek-math-7b-instruct/
+eval_sub_path:
+
+
+split_size: 8
+split_id: 0
+port: 6000
+sample_n: 5
+temperature: 0.8
+top_p: 0.9
+max_num_seqs: 64
+
+sampling_params:
+  _target_: vllm.SamplingParams
+  n: ${sample_n}
+  temperature: ${temperature}
+  max_tokens: 2048
+  stop: [ "<eos>", "\n\n\n\n", "### Instruction", "<｜end▁of▁sentence｜>" ]
+  top_p: ${top_p}
+
+
+read_tensor:
+  _target_: data.logic_combine.ResponseAlignDataset
+  aligner:
+    _target_: data.input_aligner.concat_aligner
+    aligners:
+      - _target_: data.math.meta_math_gold_answer_extractor
+        response_field: "response"
+  template: "User: {query}\nPlease reason step by step, and put your final answer within {instruction}.\n\nAssistant:"
+  instruction: "\\boxed{}"  # Hack here! because {} wil report error.
+  split_size: ${split_size}
+  split_id: ${split_id}
+  service_based: False
+#  service_processor:
+#    _target_: data.vllm.VLLMRequestGenerator
+#    api_url: http://0.0.0.0:${port}/v1/completions
+#    max_tokens: 3072
+#    model: qwen-1.5-72b
+#    stop: [ "</s>", "\n\n\n\n", "### Question", "<|im_end|>" ]
+#    n: ${sample_n}
+#    temperature: ${temperature}
+#    top_p: ${top_p}
+  flush_file: ${flush_file}
+
+
+suffix: n${sample_n}.tem${temperature}.p${top_p}.v1.0.${split_id}-of-${split_size}
+#output_file: ${output_dir}/meta_math_sub.25k.cot.train.0shot.${suffix}.json
+#output_file: ${output_dir}/meta_math_sub.100k.cot.train.0shot.${suffix}.json
+output_file: ${output_dir}/meta_math_sub_math.55k.cot.train.0shot.${suffix}.json
+flush_file: ${output_file}l
+
+post_process:
+  _target_: post_processors.openai_api_callback.DeepSeekMathCallBack
+  output_file: ${output_file}
+  eval_fn: gsm8k
+  answer_clean: gsm8k
+  resume: False
+  index_field: "id"
+  label_field: "label"
+
+# Dataloader
+num_workers: 8
+prefetch_factor:
+
+# Training hyper-parameters
+per_gpu_train_batch_size: 1
+per_gpu_eval_batch_size: 1
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+fp16: True
+fp16_bfloat16: True
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:

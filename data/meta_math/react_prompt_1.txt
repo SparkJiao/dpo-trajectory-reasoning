@@ -1,0 +1,12 @@
+### Question: Ali has four $10 bills and six $20 bills that he saved after working for Mr. James on his farm. Ali gives her sister half of the total money he has and uses 3/5 of the remaining amount of money to buy dinner. Calculate the amount of money he has after buying the dinner.
+
+SubQuestion 1: How much money does Ali have in total?
+Answer 1: Ali has four $10 bills and six $20 bills. So he has 4 * 10 + 6 * 20 = 160 dollars. The answer is 160.
+SubQuestion 2: How much money does Ali give to his sister?
+Answer 2: Ali gives half of the total money he has to his sister. So he gives 160 / 2 = 80 dollars to his sister. The answer is 80.
+SubQuestion 3: How much money does Ali have after giving his sister the money?
+Answer 3: After giving his sister the money, Ali has 160 - 80 = 80 dollars left. The answer is 80.
+SubQuestion 4: How much money does Ali use to buy dinner?
+Answer 4: Ali uses 3/5 of the remaining amount of money to buy dinner. So he uses 80 * 3/5 = 48 dollars to buy dinner. The answer is 48.
+SubQuestion 5: Now we can answer the question: How much money does Ali have after buying the dinner?
+Answer 5: After buying the dinner, Ali has 80 - 48 = 32 dollars left. The answer is 32.

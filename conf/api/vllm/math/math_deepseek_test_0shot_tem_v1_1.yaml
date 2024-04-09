@@ -1,0 +1,72 @@
+defaults:
+  - hydra: default
+#  - post_process: deepseek
+  - api/vllm/vllm_params@sampling_params: sampling_param_greedy
+  - _self_
+
+hydra:
+  searchpath:
+    - file://conf/
+
+train_file:
+dev_file:
+test_file: ../research.data/MetaMathQA/test/MATH_test.json
+
+save_best: False
+exp_name:
+exp_notes:
+output_dir: experiments/${exp_name}
+
+step: 800
+eval_sub_path: checkpoint-${step}
+
+read_tensor:
+  _target_: data.logic_combine.ResponseAlignDataset
+  aligner:
+#    _target_: data.math.math_gold_answer_extractor
+    _target_: data.math.math_gold_answer_extractor_deepseek
+    kv_mapping:
+      instruction: question
+  template: "User: {question}\nPlease reason step by step, and put your final answer within {instruction}.\n\nAssistant:"
+  instruction: "\\boxed{}"  # Hack here! because {} wil report error.
+  max_data_num: -1
+  service_based: False
+  api_based: False
+  index_field: "idx"
+
+sampling_params:
+  stop: [ "<eos>", "\n\n\n\n", "### Instruction", "<｜end▁of▁sentence｜>" ]
+
+output_file: ${output_dir}/${eval_sub_path}/math.test.v1.1.0shot.json
+flush_file: ${output_file}l
+
+# Dataloader
+num_workers: 48
+prefetch_factor: 2
+
+
+post_process:
+#  _target_: post_processors.openai_api_callback.OpenAIMATHCallBack
+  _target_: post_processors.openai_api_callback.DeepSeekMathCallBack
+  output_file: ${output_file}
+#  answer_clean:
+#    _target_: data.math.math_boxed_answer_cleaner_proxy
+  eval_fn: math
+  answer_clean: math
+  resume: False
+  index_field: "idx"
+  label_field: "label"
+
+ddp_eval: False
+no_cuda: False
+seed: 42
+local_rank: -1
+
+# Temporary variables
+fp16: True
+fp16_bfloat16: True
+n_gpu: 1
+device:
+train_batch_size:
+eval_batch_size:
+world_size:
