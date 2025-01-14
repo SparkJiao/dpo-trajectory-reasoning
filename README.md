@@ -1,6 +1,6 @@
 # Learning Planning-based Reasoning with Trajectory Collection and Process Rewards Synthesizing
 
-This repository contains the code for the paper "Learning Planning-based Reasoning with Trajectory Collection and Process Rewards Synthesizing".
+This repository contains the code for the paper "Learning Planning-based Reasoning with Trajectory Collection and Process Rewards Synthesizing" (EMNLP 2024).
 
 ## Requirements
 
@@ -162,11 +162,11 @@ No offline data is required.
 If you find this code or the paper useful in your research, please consider citing us:
 
 ```
-@article{jiao2023lpr,
-  title={Learning Planning-based Reasoning with Trajectory Collection and Process Rewards Synthesizing},
+@inproceedings{jiao2024lpr,
   author={Fangkai Jiao and Chengwei Qin and Zhengyuan Liu and Nancy F. Chen and Shafiq Joty},
-  journal      = {CoRR},
+  title        = {Learning Planning-based Reasoning with Trajectory Collection and Process Rewards Synthesizing},
+  booktitle    = {{EMNLP}},
+  publisher    = {Association for Computational Linguistics},
   year         = {2024},
-  url          = {arxiv.org/abs/2402.00658},
 }
 ```
